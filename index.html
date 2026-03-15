@@ -1674,11 +1674,13 @@ async function handleSpotifyCallback() {
 
 // ── STEP 3: Create playlist ──
 async function createSpotifyPlaylist() {
-  const memberName = currentModalMember;
+  // Read member name from the playlist name field as source of truth
+  const playlistName = document.getElementById('playlistNameInput2').value.trim();
+  // Extract member name from playlist name (format: "Name — The Vault")
+  const memberFromField = playlistName.replace(/\s*—\s*The Vault\s*$/i, '').trim();
+  const memberName = (memberFromField && allData[memberFromField]) ? memberFromField : currentModalMember;
   const data = allData[memberName];
-  if (!data) return;
-
-  const playlistName = document.getElementById('playlistNameInput2').value.trim() || `${memberName} — The Vault`;
+  if (!data) { toast('Member not found — please close and reopen the modal'); return; }
   const spotifyTracks = data.spotify || [];
 
   if (spotifyTracks.length === 0) {
