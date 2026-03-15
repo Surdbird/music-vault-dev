@@ -2094,56 +2094,41 @@ async function loadGenreView() {
 async function buildGenreData() {
   genreData = {};
   
-  // Collect all unique Spotify track URLs across all members
-  const tracksByMember = {};
-  for (const [memberName, data] of Object.entries(allData)) {
-    const tracks = data.spotify || [];
-    if (tracks.length) tracksByMember[memberName] = tracks;
-  }
-  
-  const members = Object.keys(tracksByMember);
+  const members = Object.keys(allData).filter(m => allData[m].spotify?.length > 0);
   let processed = 0;
-  
+
   for (const memberName of members) {
-    const tracks = tracksByMember[memberName];
-    // Get artist IDs from track URLs
-    const trackIds = tracks.map(t => t.url.match(/track\/([a-zA-Z0-9]+)/)?.[1]).filter(Boolean);
+    const tracks = allData[memberName].spotify || [];
+    // Sample up to 5 tracks per member to get genre profile
+    const sample = tracks.slice(0, 5);
+    const trackIds = sample.map(t => t.url.match(/track\/([a-zA-Z0-9]+)/)?.[1]).filter(Boolean);
     
-    // Fetch track details in batches to get artist IDs
-    for (let i = 0; i < trackIds.length; i += 10) {
-      const batch = trackIds.slice(i, i + 10);
+    for (const id of trackIds) {
       try {
-        for (const id of batch) {
-          const track = await spotifyFetch(`https://api.spotify.com/v1/tracks/${id}`);
-          if (track?.artists?.[0]) {
-            const artistId = track.artists[0].id;
-            const artist = await spotifyFetch(`https://api.spotify.com/v1/artists/${artistId}`);
-            const genres = artist?.genres || [];
-            
-            // Map to broad + sub genres
-            const broadGenre = getBroadGenre(genres);
-            const subGenre = genres[0] || 'unclassified';
-            
-            if (!genreData[broadGenre]) genreData[broadGenre] = {};
-            if (!genreData[broadGenre][subGenre]) genreData[broadGenre][subGenre] = {};
-            if (!genreData[broadGenre][subGenre][memberName]) genreData[broadGenre][subGenre][memberName] = [];
-            genreData[broadGenre][subGenre][memberName].push(track.id);
-          }
-          await new Promise(r => setTimeout(r, 150));
+        const track = await spotifyFetch(`https://api.spotify.com/v1/tracks/${id}`);
+        if (track?.artists?.[0]) {
+          const artist = await spotifyFetch(`https://api.spotify.com/v1/artists/${track.artists[0].id}`);
+          const genres = artist?.genres || [];
+          const broadGenre = getBroadGenre(genres);
+          const subGenre = genres[0] || 'unclassified';
+          
+          if (!genreData[broadGenre]) genreData[broadGenre] = {};
+          if (!genreData[broadGenre][subGenre]) genreData[broadGenre][subGenre] = {};
+          if (!genreData[broadGenre][subGenre][memberName]) genreData[broadGenre][subGenre][memberName] = 0;
+          genreData[broadGenre][subGenre][memberName]++;
         }
-      } catch(e) { /* skip */ }
-      
-      // Update progress
-      processed++;
-      const pct = Math.round(processed / members.length * 100);
-      const fill = document.getElementById('genreProgressFill');
-      const txt = document.getElementById('genreProgressText');
-      if (fill) fill.style.width = pct + '%';
-      if (txt) txt.textContent = `${memberName} (${processed}/${members.length} members)`;
+        await new Promise(r => setTimeout(r, 300));
+      } catch(e) { /* skip this track */ }
     }
+
+    processed++;
+    const pct = Math.round(processed / members.length * 100);
+    const fill = document.getElementById('genreProgressFill');
+    const txt = document.getElementById('genreProgressText');
+    if (fill) fill.style.width = pct + '%';
+    if (txt) txt.textContent = `${memberName} (${processed}/${members.length} members)`;
   }
   
-  // Save to localStorage
   try { localStorage.setItem('vault_genres', JSON.stringify(genreData)); } catch(e) {}
   genreFetchDone = true;
 }
@@ -2163,8 +2148,8 @@ function renderGenreView() {
   
   // Sort broad genres by track count
   const sorted = Object.entries(genreData).sort(([,a],[,b]) => {
-    const countA = Object.values(a).reduce((s, members) => s + Object.values(members).reduce((ms, tracks) => ms + tracks.length, 0), 0);
-    const countB = Object.values(b).reduce((s, members) => s + Object.values(members).reduce((ms, tracks) => ms + tracks.length, 0), 0);
+    const countA = Object.values(a).reduce((s, members) => s + Object.values(members).reduce((ms, t) => ms + (typeof t === 'number' ? t : t.length), 0), 0);
+    const countB = Object.values(b).reduce((s, members) => s + Object.values(members).reduce((ms, t) => ms + (typeof t === 'number' ? t : t.length), 0), 0);
     return countB - countA;
   });
 
@@ -2175,12 +2160,12 @@ function renderGenreView() {
 
   content.innerHTML = sorted.map(([broad, subGenres]) => {
     const totalTracks = Object.values(subGenres).reduce((s, members) => 
-      s + Object.values(members).reduce((ms, tracks) => ms + tracks.length, 0), 0);
+      s + Object.values(members).reduce((ms, t) => ms + (typeof t === 'number' ? t : t.length), 0), 0);
     
     const subGenreItems = Object.entries(subGenres)
       .sort(([,a],[,b]) => Object.values(b).reduce((s,t)=>s+t.length,0) - Object.values(a).reduce((s,t)=>s+t.length,0))
       .map(([sub, members]) => {
-        const count = Object.values(members).reduce((s, t) => s + t.length, 0);
+        const count = Object.values(members).reduce((s, t) => s + (typeof t === 'number' ? t : t.length), 0);
         const memberList = Object.keys(members).join(', ');
         return `<div class="subgenre-item">
           <span class="subgenre-name">${escHtml(sub)}</span>
