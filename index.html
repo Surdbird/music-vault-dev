@@ -1426,9 +1426,10 @@ function toggleBlock(id) {
 }
 
 function maybeLoadSpotifyTitles(name) {
-  if (!spotifyToken) return;
-  const tracks = allData[name]?.spotify || [];
-  if (tracks.length) fetchSpotifyTitles(tracks.map(t=>t.url));
+  // Disabled - causes 429 Too Many Requests
+  // if (!spotifyToken) return;
+  // const tracks = allData[name]?.spotify || [];
+  // if (tracks.length) fetchSpotifyTitles(tracks.map(t=>t.url));
 }
 
 function setPlatformFilter(key, btn) {
@@ -1678,6 +1679,7 @@ async function createSpotifyPlaylist() {
   // Get member from button data attribute (most reliable source)
   const btn = document.getElementById('modalActionBtn');
   const memberName = btn.dataset.member || currentModalMember;
+  console.log('Creating playlist for:', memberName, '| btn.dataset.member:', btn.dataset.member, '| currentModalMember:', currentModalMember);
   const data = allData[memberName];
   if (!data) { toast('Member not found — please close and reopen the modal'); return; }
   const playlistName = document.getElementById('playlistNameInput2').value.trim() || `${memberName} — The Vault`;
