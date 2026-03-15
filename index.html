@@ -1425,6 +1425,12 @@ function toggleBlock(id) {
   document.getElementById(id)?.classList.toggle('collapsed-block');
 }
 
+function maybeLoadSpotifyTitles(name) {
+  if (!spotifyToken) return;
+  const tracks = allData[name]?.spotify || [];
+  if (tracks.length) fetchSpotifyTitles(tracks.map(t=>t.url));
+}
+
 function setPlatformFilter(key, btn) {
   platformFilter = key;
   document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
@@ -1526,6 +1532,8 @@ const SPOTIFY_SCOPES = 'playlist-modify-public';
 // Called when user clicks "◎ Spotify Playlist" button
 function openSpotifyModal(memberName) {
   currentModalMember = memberName;
+  // Clear any stale pending member from sessionStorage
+  sessionStorage.removeItem('sp_pending_member');
   const data = allData[memberName];
   const spCount = data?.spotify?.length || 0;
 
