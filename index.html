@@ -1824,18 +1824,16 @@ async function fetchSpotifyTitles(urls) {
   for (let i = 0; i < ids.length; i += BATCH) {
     try {
       const batch = ids.slice(i, i + BATCH);
-      // Fetch tracks one by one since batch endpoint is removed
+      // Fetch tracks one by one since batch endpoint is removed in Feb 2026
       for (const id of batch) {
         try {
           const track = await spotifyFetch(`https://api.spotify.com/v1/tracks/${id}`);
           if (track) {
-        if (track) {
             spotifyTitleCache[track.id] = `${track.artists.map(a=>a.name).join(', ')} — ${track.name}`;
           }
         } catch(e) {}
         await new Promise(r => setTimeout(r, 100));
       }
-      {
       // Save to localStorage
       try { const s=JSON.stringify(spotifyTitleCache); if(s.length<2000000) localStorage.setItem('sp_title_cache',s); } catch(e) {}
       // Update visible cells
@@ -1877,18 +1875,16 @@ async function fetchSpotifyTitles(urls) {
   for (let i = 0; i < ids.length; i += BATCH) {
     try {
       const batch = ids.slice(i, i + BATCH);
-      // Fetch tracks one by one since batch endpoint is removed
+      // Fetch tracks one by one since batch endpoint is removed in Feb 2026
       for (const id of batch) {
         try {
           const track = await spotifyFetch(`https://api.spotify.com/v1/tracks/${id}`);
           if (track) {
-        if (track) {
             spotifyTitleCache[track.id] = `${track.artists.map(a=>a.name).join(', ')} — ${track.name}`;
           }
         } catch(e) {}
         await new Promise(r => setTimeout(r, 100));
       }
-      {
       // Save to localStorage
       try { const s=JSON.stringify(spotifyTitleCache); if(s.length<2000000) localStorage.setItem('sp_title_cache',s); } catch(e) {}
       // Update visible cells
