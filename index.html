@@ -1114,7 +1114,28 @@ function runExtraction() {
 }
 
 function parseChat(text) {
-  const lines = text.split('\n');
+  // Privacy filter: only keep lines containing music links
+  const MUSIC_DOMAINS = ['youtube.com', 'youtu.be', 'spotify.com', 'spotify.link', 
+    'music.apple.com', 'itunes.apple.com', 'bandcamp.com', 'music.youtube.com'];
+  const allLines = text.split('\n');
+  
+  // We need to keep date/sender lines that precede music link lines
+  // Strategy: keep a line if it OR the next few lines contain a music link
+  const lines = [];
+  for (let i = 0; i < allLines.length; i++) {
+    const line = allLines[i];
+    // Check if this line or continuation lines have a music link
+    const windowEnd = Math.min(i + 3, allLines.length);
+    let hasMusic = false;
+    for (let j = i; j < windowEnd; j++) {
+      if (MUSIC_DOMAINS.some(d => allLines[j].includes(d))) {
+        hasMusic = true;
+        break;
+      }
+    }
+    if (hasMusic) lines.push(line);
+  }
+  
   const members = {};
   let totalLinks = 0;
 
