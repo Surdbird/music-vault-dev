@@ -979,7 +979,8 @@ textarea::placeholder { color: var(--muted); }
 // Restore chat from sessionStorage if available
 (function restoreChat(){
   try{
-    const saved=sessionStorage.getItem('vault_chat');
+    // Try sessionStorage first, then localStorage compact backup
+    const saved=sessionStorage.getItem('vault_chat') || localStorage.getItem('vault_chat_compact');
     if(saved){
       allData=JSON.parse(saved);
       const names=Object.keys(allData);
@@ -1103,7 +1104,21 @@ function runExtraction() {
     try {
       const result = parseChat(text);
       allData = result.members;
-      try{sessionStorage.setItem('vault_chat',JSON.stringify(allData));}catch(e){}
+      try{
+        // Save full data to sessionStorage
+        sessionStorage.setItem('vault_chat',JSON.stringify(allData));
+        // Save compact version to localStorage (just URLs, no message text) for redirect recovery
+        const compact = {};
+        for(const [name, data] of Object.entries(allData)){
+          compact[name] = {
+            youtube: data.youtube.map(t=>({url:t.url,date:t.date,time:t.time})),
+            spotify: data.spotify.map(t=>({url:t.url,date:t.date,time:t.time})),
+            applemusic: data.applemusic.map(t=>({url:t.url,date:t.date,time:t.time})),
+            bandcamp: data.bandcamp.map(t=>({url:t.url,date:t.date,time:t.time}))
+          };
+        }
+        try{localStorage.setItem('vault_chat_compact',JSON.stringify(compact));}catch(e){}
+      }catch(e){}
       renderAll(result);
     } catch(e) {
       toast('Error parsing chat — ' + e.message);
@@ -1569,100 +1584,85 @@ function spotifyModalAction() {
   }
 }
 
-// ── STEP 1: PKCE Auth via popup ──
+// ── STEP 1: PKCE Auth via page redirect ──
 async function initiateSpotifyAuth() {
   const clientId = document.getElementById('clientIdInput').value.trim();
   if (!clientId) { toast('Please enter your Spotify Client ID'); return; }
-  localStorage.setItem('sp_client_id', clientId);
-
+  
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
-  // Clear any old verifier first
-  localStorage.removeItem('sp_verifier');
-  localStorage.setItem('sp_verifier', verifier);
+  
+  // Store in sessionStorage — survives page redirect
+  sessionStorage.setItem('sp_client_id', clientId);
+  sessionStorage.setItem('sp_verifier', verifier);
+  sessionStorage.setItem('sp_pending_member', currentModalMember || '');
+  sessionStorage.setItem('sp_playlist_name', document.getElementById('playlistNameInput').value.trim());
+  localStorage.setItem('sp_client_id', clientId);
 
-  const redirectUri = getRedirectUri();
-  const params = new URLSearchParams({
+  window.location.href = `https://accounts.spotify.com/authorize?${new URLSearchParams({
     client_id: clientId,
     response_type: 'code',
-    redirect_uri: redirectUri,
+    redirect_uri: getRedirectUri(),
     scope: SPOTIFY_SCOPES,
     code_challenge_method: 'S256',
     code_challenge: challenge,
-  });
-
-  // Open in popup so main page keeps chat data
-  const popup = window.open(
-    `https://accounts.spotify.com/authorize?${params}`,
-    'spotify_auth',
-    'width=500,height=700,scrollbars=yes'
-  );
-
-  // Poll for popup to redirect back with code
-  const poll = setInterval(async () => {
-    try {
-      if (!popup || popup.closed) { clearInterval(poll); return; }
-      let url;
-      try { url = popup.location.href; } catch(e) { return; }
-      if (url && url.startsWith(redirectUri) && url.includes('code=')) {
-        clearInterval(poll);
-        const urlParams = new URL(url).searchParams;
-        const code = urlParams.get('code');
-        const error = urlParams.get('error');
-        try { popup.close(); } catch(e) {}
-        if (error) { toast('Spotify auth cancelled'); return; }
-        if (code) await exchangeCode(code);
-      }
-    } catch(e) { /* cross-origin — still loading, ignore */ }
-  }, 300);
-  // Timeout after 3 minutes
-  setTimeout(() => clearInterval(poll), 180000);
+  })}`;
 }
 
-async function exchangeCode(code) {
-  const clientId = localStorage.getItem('sp_client_id');
-  const verifier = localStorage.getItem('sp_verifier');
-  const redirectUri = getRedirectUri();
-  if (!clientId || !verifier) { toast('Auth error — please try again'); return; }
-  try {
-    const res = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code, redirect_uri: redirectUri,
-        client_id: clientId,
-        code_verifier: verifier,
-      })
-    });
-    const json = await res.json();
-    if (!json.access_token) throw new Error(json.error_description || 'Token exchange failed');
-    spotifyToken = json.access_token;
-    localStorage.setItem('sp_token', spotifyToken);
-    localStorage.setItem('sp_token_expiry', Date.now() + json.expires_in * 1000);
-    const profile = await spotifyFetch('https://api.spotify.com/v1/me');
-    spotifyUserId = profile.id;
-    spotifyUserName = profile.display_name || profile.id;
-    showConnectedState(currentModalMember);
-    document.getElementById('spotifyModal').classList.remove('hidden');
-    toast(`Connected as ${spotifyUserName}`);
-    // Fetch titles for currently selected member
-    if (activeMember) maybeLoadSpotifyTitles(activeMember);
-  } catch(e) {
-    toast('Spotify auth failed: ' + e.message);
-  }
-}
-
-// ── STEP 2: Handle redirect back (fallback for non-popup) ──
+// ── STEP 2: Handle redirect back ──
 async function handleSpotifyCallback() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('code');
   const error = params.get('error');
   if (error) { toast('Spotify auth cancelled'); cleanUrl(); return; }
   if (!code) return;
-  cleanUrl();
-  await exchangeCode(code);
+
+  const clientId = sessionStorage.getItem('sp_client_id') || localStorage.getItem('sp_client_id');
+  const verifier = sessionStorage.getItem('sp_verifier');
+  
+  if (!clientId || !verifier) { toast('Auth error — please try again'); cleanUrl(); return; }
+
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code, redirect_uri: getRedirectUri(),
+        client_id: clientId, code_verifier: verifier,
+      })
+    });
+    const json = await res.json();
+    if (!json.access_token) throw new Error(json.error_description || 'Token exchange failed');
+    
+    spotifyToken = json.access_token;
+    localStorage.setItem('sp_token', spotifyToken);
+    localStorage.setItem('sp_token_expiry', Date.now() + json.expires_in * 1000);
+    
+    const profile = await spotifyFetch('https://api.spotify.com/v1/me');
+    spotifyUserId = profile.id;
+    spotifyUserName = profile.display_name || profile.id;
+    cleanUrl();
+    sessionStorage.removeItem('sp_verifier');
+    
+    const pending = sessionStorage.getItem('sp_pending_member');
+    const playlistName = sessionStorage.getItem('sp_playlist_name');
+    
+    if (pending && allData[pending]) {
+      currentModalMember = pending;
+      showConnectedState(pending);
+      if (playlistName) document.getElementById('playlistNameInput2').value = playlistName;
+      document.getElementById('spotifyModal').classList.remove('hidden');
+    } else {
+      toast(`Connected as ${spotifyUserName}`);
+    }
+    if (activeMember) maybeLoadSpotifyTitles(activeMember);
+  } catch(e) {
+    toast('Spotify auth failed: ' + e.message);
+    cleanUrl();
+  }
 }
+
 
 // ── STEP 3: Create playlist ──
 async function createSpotifyPlaylist() {
