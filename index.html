@@ -1581,6 +1581,7 @@ function showConnectedState(memberName) {
   document.getElementById('spUserName').textContent = spotifyUserName || '...';
   document.getElementById('playlistNameInput2').value = `${memberName} — The Vault`;
   document.getElementById('modalActionBtn').textContent = '◎ Create Playlist →';
+  document.getElementById('modalActionBtn').dataset.member = memberName;
 }
 
 // Main button action — either connect or create
@@ -1674,13 +1675,12 @@ async function handleSpotifyCallback() {
 
 // ── STEP 3: Create playlist ──
 async function createSpotifyPlaylist() {
-  // Read member name from the playlist name field as source of truth
-  const playlistName = document.getElementById('playlistNameInput2').value.trim();
-  // Extract member name from playlist name (format: "Name — The Vault")
-  const memberFromField = playlistName.replace(/\s*—\s*The Vault\s*$/i, '').trim();
-  const memberName = (memberFromField && allData[memberFromField]) ? memberFromField : currentModalMember;
+  // Get member from button data attribute (most reliable source)
+  const btn = document.getElementById('modalActionBtn');
+  const memberName = btn.dataset.member || currentModalMember;
   const data = allData[memberName];
   if (!data) { toast('Member not found — please close and reopen the modal'); return; }
+  const playlistName = document.getElementById('playlistNameInput2').value.trim() || `${memberName} — The Vault`;
   const spotifyTracks = data.spotify || [];
 
   if (spotifyTracks.length === 0) {
