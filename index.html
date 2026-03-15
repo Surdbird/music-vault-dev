@@ -976,8 +976,30 @@ textarea::placeholder { color: var(--muted); }
 // ──────────────────────────────────────────────
 // GLOBALS
 // ──────────────────────────────────────────────
-// Clear only the chat cache (too large), keep tokens and title caches
-try{localStorage.removeItem('vault_chat');}catch(e){}
+// Restore chat from sessionStorage if available
+(function restoreChat(){
+  try{
+    const saved=sessionStorage.getItem('vault_chat');
+    if(saved){
+      allData=JSON.parse(saved);
+      const names=Object.keys(allData);
+      if(names.length){
+        let total=0,totYT=0,totSP=0,totAM=0,totBC=0;
+        for(const m of Object.values(allData)){totYT+=m.youtube.length;totSP+=m.spotify.length;totAM+=m.applemusic.length;totBC+=m.bandcamp.length;total+=m.youtube.length+m.spotify.length+m.applemusic.length+m.bandcamp.length;}
+        document.getElementById('statMembers').textContent=names.length;
+        document.getElementById('statLinks').textContent=total;
+        document.getElementById('statYT').textContent=totYT;
+        document.getElementById('statSP').textContent=totSP;
+        document.getElementById('statAM').textContent=totAM;
+        document.getElementById('statBC').textContent=totBC;
+        document.getElementById('statsRow').style.display='grid';
+        document.getElementById('mainArea').style.display='grid';
+        document.getElementById('uploadSection').style.marginBottom='0';
+        renderMemberList(names);selectMember(names[0]);
+      }
+    }
+  }catch(e){}
+})();
 
 let allData = {};          // { memberName: { youtube: [], spotify: [], applemusic: [], bandcamp: [] } }
 let activeMember = null;
@@ -1081,6 +1103,7 @@ function runExtraction() {
     try {
       const result = parseChat(text);
       allData = result.members;
+      try{sessionStorage.setItem('vault_chat',JSON.stringify(allData));}catch(e){}
       renderAll(result);
     } catch(e) {
       toast('Error parsing chat — ' + e.message);
