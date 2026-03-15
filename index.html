@@ -2104,21 +2104,27 @@ async function buildGenreData() {
     const trackIds = sample.map(t => t.url.match(/track\/([a-zA-Z0-9]+)/)?.[1]).filter(Boolean);
     
     for (const id of trackIds) {
-      try {
-        const track = await spotifyFetch(`https://api.spotify.com/v1/tracks/${id}`);
-        if (track?.artists?.[0]) {
-          const artist = await spotifyFetch(`https://api.spotify.com/v1/artists/${track.artists[0].id}`);
-          const genres = artist?.genres || [];
-          const broadGenre = getBroadGenre(genres);
-          const subGenre = genres[0] || 'unclassified';
-          
-          if (!genreData[broadGenre]) genreData[broadGenre] = {};
-          if (!genreData[broadGenre][subGenre]) genreData[broadGenre][subGenre] = {};
-          if (!genreData[broadGenre][subGenre][memberName]) genreData[broadGenre][subGenre][memberName] = 0;
-          genreData[broadGenre][subGenre][memberName]++;
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          const track = await spotifyFetch(`https://api.spotify.com/v1/tracks/${id}`);
+          if (track?.artists?.[0]) {
+            const artist = await spotifyFetch(`https://api.spotify.com/v1/artists/${track.artists[0].id}`);
+            const genres = artist?.genres || [];
+            const broadGenre = getBroadGenre(genres);
+            const subGenre = genres[0] || 'unclassified';
+            if (!genreData[broadGenre]) genreData[broadGenre] = {};
+            if (!genreData[broadGenre][subGenre]) genreData[broadGenre][subGenre] = {};
+            if (!genreData[broadGenre][subGenre][memberName]) genreData[broadGenre][subGenre][memberName] = 0;
+            genreData[broadGenre][subGenre][memberName]++;
+          }
+          await new Promise(r => setTimeout(r, 500));
+          break;
+        } catch(e) {
+          retries--;
+          if (retries > 0) await new Promise(r => setTimeout(r, 2000)); // wait 2s before retry
         }
-        await new Promise(r => setTimeout(r, 300));
-      } catch(e) { /* skip this track */ }
+      }
     }
 
     processed++;
@@ -2154,7 +2160,8 @@ function renderGenreView() {
   });
 
   if (!sorted.length) {
-    content.innerHTML = '<div class="genre-loading">No genre data found. Make sure you are connected to Spotify.</div>';
+    content.innerHTML = '<div class="genre-loading">No genre data collected — Spotify rate limits may have blocked requests.<br><br>Try clicking GENRES again to retry.</div>';
+    genreFetchDone = false;
     return;
   }
 
