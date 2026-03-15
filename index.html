@@ -976,8 +976,8 @@ textarea::placeholder { color: var(--muted); }
 // ──────────────────────────────────────────────
 // GLOBALS
 // ──────────────────────────────────────────────
-// Auto-clear localStorage to fix corruption
-try{localStorage.clear();sessionStorage.clear();}catch(e){}
+// Clear only the chat cache (too large), keep tokens and title caches
+try{localStorage.removeItem('vault_chat');}catch(e){}
 
 let allData = {};          // { memberName: { youtube: [], spotify: [], applemusic: [], bandcamp: [] } }
 let activeMember = null;
