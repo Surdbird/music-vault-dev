@@ -2074,10 +2074,11 @@ async function loadGenreView() {
     return;
   }
 
-  if (genreFetchDone) {
+  if (genreFetchDone && Object.keys(genreData).length > 0) {
     renderGenreView();
     return;
   }
+  genreFetchDone = false;
 
   // Start fetching genres
   content.innerHTML = `<div class="genre-loading">
@@ -2207,7 +2208,13 @@ function toggleGenreCard(id) {
 // Load cached genre data on startup
 try {
   const cached = localStorage.getItem('vault_genres');
-  if (cached) { genreData = JSON.parse(cached); genreFetchDone = true; }
+  if (cached) {
+    const parsed = JSON.parse(cached);
+    if (Object.keys(parsed).length > 0) {
+      genreData = parsed;
+      genreFetchDone = true;
+    }
+  }
 } catch(e) {}
 
 
