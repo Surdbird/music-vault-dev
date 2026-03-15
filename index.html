@@ -1581,8 +1581,11 @@ function showConnectedState(memberName) {
   document.getElementById('connectedFields').style.display = 'block';
   document.getElementById('spUserName').textContent = spotifyUserName || '...';
   document.getElementById('playlistNameInput2').value = `${memberName} — The Vault`;
-  document.getElementById('modalActionBtn').textContent = '◎ Create Playlist →';
-  document.getElementById('modalActionBtn').dataset.member = memberName;
+  const modalBtn = document.getElementById('modalActionBtn');
+  modalBtn.textContent = '◎ Create Playlist →';
+  modalBtn.dataset.member = memberName;
+  modalBtn.onclick = spotifyModalAction;  // Reset in case it was changed to "Open Playlist"
+  modalBtn.disabled = false;
 }
 
 // Main button action — either connect or create
@@ -1677,9 +1680,9 @@ async function handleSpotifyCallback() {
 // ── STEP 3: Create playlist ──
 async function createSpotifyPlaylist() {
   // Get member from button data attribute (most reliable source)
-  const btn = document.getElementById('modalActionBtn');
-  const memberName = btn.dataset.member || currentModalMember;
-  console.log('Creating playlist for:', memberName, '| btn.dataset.member:', btn.dataset.member, '| currentModalMember:', currentModalMember);
+  const createBtn = document.getElementById('modalActionBtn');
+  const memberName = createBtn.dataset.member || currentModalMember;
+  console.log('Creating playlist for:', memberName, '| data-member:', createBtn.dataset.member, '| currentModalMember:', currentModalMember);
   const data = allData[memberName];
   if (!data) { toast('Member not found — please close and reopen the modal'); return; }
   const playlistName = document.getElementById('playlistNameInput2').value.trim() || `${memberName} — The Vault`;
@@ -1703,8 +1706,8 @@ async function createSpotifyPlaylist() {
   }
 
   // Show progress
-  const btn = document.getElementById('modalActionBtn');
-  btn.disabled = true;
+  const actionBtn = document.getElementById('modalActionBtn');
+  actionBtn.disabled = true;
   const progressWrap = document.getElementById('progressWrap');
   progressWrap.classList.add('visible');
   logProgress(`Creating playlist "${playlistName}"...`);
@@ -1747,16 +1750,16 @@ async function createSpotifyPlaylist() {
     logProgress(`✓ Done! ${trackUris.length} tracks added.`);
     document.getElementById('progressText').textContent = '✓ Playlist created!';
 
-    btn.textContent = '↗ Open Playlist';
-    btn.disabled = false;
-    btn.onclick = () => window.open(`https://open.spotify.com/playlist/${playlist.id}`, '_blank');
+    actionBtn.textContent = '↗ Open Playlist';
+    actionBtn.disabled = false;
+    actionBtn.onclick = () => window.open(`https://open.spotify.com/playlist/${playlist.id}`, '_blank');
 
     toast(`Playlist "${playlistName}" created with ${trackUris.length} tracks!`);
 
   } catch(e) {
     logProgress(`✗ Error: ${e.message}`);
-    btn.disabled = false;
-    btn.textContent = '◎ Retry';
+    actionBtn.disabled = false;
+    actionBtn.textContent = '◎ Retry';
     toast('Error creating playlist: ' + e.message);
   }
 }
