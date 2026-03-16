@@ -2593,6 +2593,7 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
   if (!weekData) return;
 
   const spotifyTracks = weekData.tracks.filter(t => t.platform === 'spotify');
+  console.log('[Vault] W digest SP tracks:', spotifyTracks.length, spotifyTracks.map(t => t.url));
   if (!spotifyTracks.length) { toast('No Spotify tracks this week'); return; }
 
   const playlistName = `The Vault — ${weekLabel} (${dateRange})`;
@@ -2658,8 +2659,11 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
       btn.disabled = false;
       btn.onclick = (e) => { e.stopPropagation(); window.open(`https://open.spotify.com/playlist/${pl.id}`, '_blank'); };
     }
-    const skippedNote = skipped.length ? ` (${skipped.length} links skipped)` : '';
-    toast(`✓ "${playlistName}" — ${uris.length} tracks${skippedNote}`);
+    const skippedNote = skipped.length ? ` (${skipped.length} skipped)` : '';
+    const summary = `✓ ${uris.length} tracks${skippedNote} from ${spotifyTracks.length} SP links`;
+    toast(summary);
+    console.log('[Vault] FINAL SUMMARY:', summary);
+    console.log('[Vault] Skipped URLs:', skipped);
 
   } catch (e) {
     if (btn) { btn.textContent = origText; btn.disabled = false; }
@@ -3005,7 +3009,7 @@ function escAttr(s) {
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
+  setTimeout(() => t.classList.remove('show'), 10000); // extended for debug
 }
 </script>
 </body>
