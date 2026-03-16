@@ -1612,6 +1612,7 @@ function renderPlatformBlock(memberName, key, cfg, tracks) {
         <div class="platform-block-acts">
           <button class="btn-sm" style="border-color:var(--${cfg.cls});color:var(--${cfg.cls})" onclick="copyPlatformLinks(event,'${escAttr(memberName)}','${key}')">⎘ copy links</button>
           ${key==='youtube'?'<button class="btn-sm" style="border-color:var(--yt);color:var(--yt)" onclick="openYouTubePlaylist(event,\''+escAttr(memberName)+'\')">▶ YT Playlist</button>':''}
+          ${key==='applemusic'?'<button class="btn-sm" style="border-color:var(--am);color:var(--am)" onclick="openAllAppleMusic(event,\''+escAttr(memberName)+'\')">♪ open all</button>':''}
           <span class="chevron-icon">▾</span>
         </div>
       </div>
@@ -2385,6 +2386,33 @@ function openYouTubePlaylist(e, memberName) {
   toast(`Opened first ${first50.length} of ${ids.length} YouTube videos as playlist`);
 }
 
+function openAllAppleMusic(e, memberName) {
+  e.stopPropagation();
+  const tracks = allData[memberName]?.applemusic || [];
+  if (!tracks.length) { toast('No Apple Music links found'); return; }
+  // Open first 10 in tabs (browsers block mass tab opening beyond ~10)
+  const first10 = tracks.slice(0, 10);
+  first10.forEach(t => window.open(t.url, '_blank'));
+  if (tracks.length > 10) {
+    toast(`Opened first 10 of ${tracks.length} Apple Music links — copy links to get all`);
+  } else {
+    toast(`Opened ${tracks.length} Apple Music link${tracks.length !== 1 ? 's' : ''}`);
+  }
+}
+
+function copyDigestLinks(weekKey, platform) {
+  const weekMap = buildWeekMap();
+  const weekData = weekMap[weekKey];
+  if (!weekData) return;
+  const tracks = weekData.tracks.filter(t => t.platform === platform);
+  if (!tracks.length) { toast('No links found'); return; }
+  const links = tracks.map(t => t.url).join('\n');
+  navigator.clipboard.writeText(links).then(() => {
+    const name = platform === 'applemusic' ? 'Apple Music' : 'Bandcamp';
+    toast(`⎘ Copied ${tracks.length} ${name} links`);
+  });
+}
+
 
 // ──────────────────────────────────────────────
 // DIGESTS VIEW
@@ -2534,9 +2562,11 @@ function renderDigests() {
       </div>`;
     }).join('');
 
-    // Spotify tracks from this week
+    // Platform tracks for this week
     const spotifyTracks = sorted.filter(t => t.platform === 'spotify');
     const ytTracks = sorted.filter(t => t.platform === 'youtube');
+    const appleTracks = sorted.filter(t => t.platform === 'applemusic');
+    const bandcampTracks = sorted.filter(t => t.platform === 'bandcamp');
 
     html += `
     <div class="digest-week" id="dw-${key}">
@@ -2547,6 +2577,8 @@ function renderDigests() {
         <div class="digest-week-actions">
           ${ytTracks.length > 0 ? `<button class="btn-sm" style="border-color:var(--yt);color:var(--yt)" onclick="event.stopPropagation();openDigestYouTubePlaylist('${key}')" title="Open YouTube playlist for this week">▶ YT</button>` : ''}
           ${spotifyTracks.length > 0 ? `<button class="btn-sm btn-sp" onclick="event.stopPropagation();createDigestSpotifyPlaylist('${key}')" title="Create Spotify playlist for this week">SP ＋</button>` : ''}
+          ${appleTracks.length > 0 ? `<button class="btn-sm" style="border-color:var(--am);color:var(--am)" onclick="event.stopPropagation();copyDigestLinks('${key}','applemusic')" title="Copy Apple Music links for this week">♪ copy</button>` : ''}
+          ${bandcampTracks.length > 0 ? `<button class="btn-sm" style="border-color:var(--bc);color:var(--bc)" onclick="event.stopPropagation();copyDigestLinks('${key}','bandcamp')" title="Copy Bandcamp links for this week">◈ copy</button>` : ''}
         </div>
         <span class="digest-toggle">▼</span>
       </div>
