@@ -2131,20 +2131,35 @@ async function createSpotifyPlaylist() {
       logProgress(`Playlist created. Adding ${trackUris.length} tracks in batches...`);
     }
 
-    // Add tracks in batches of 100 (Spotify API limit)
+    // Add tracks in batches of 100, with retry + backoff for large playlists
     const BATCH = 100;
     let added = 0;
     for (let i = 0; i < trackUris.length; i += BATCH) {
       const batch = trackUris.slice(i, i + BATCH);
-      await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist.id}/items`, {
-        method: 'POST',
-        body: JSON.stringify({ uris: batch })
-      });
+      let attempts = 0, success = false;
+      while (!success && attempts < 5) {
+        try {
+          await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist.id}/items`, {
+            method: 'POST',
+            body: JSON.stringify({ uris: batch })
+          });
+          success = true;
+        } catch(batchErr) {
+          attempts++;
+          const wait = attempts * 2000; // 2s, 4s, 6s, 8s, 10s
+          logProgress(`⚠ Batch error (attempt ${attempts}/5), retrying in ${wait/1000}s... ${batchErr.message}`);
+          await sleep(wait);
+        }
+      }
+      if (!success) throw new Error(`Failed to add batch at position ${i} after 5 attempts`);
       added += batch.length;
       setProgress(added, trackUris.length);
       logProgress(`Added ${added} / ${trackUris.length} tracks`);
-      // Small pause between batches
-      if (i + BATCH < trackUris.length) await sleep(300);
+      // Progressive pause — longer for bigger playlists to avoid rate limits
+      if (i + BATCH < trackUris.length) {
+        const pause = trackUris.length > 1000 ? 800 : trackUris.length > 500 ? 500 : 300;
+        await sleep(pause);
+      }
     }
 
     logProgress(`✓ Done! ${trackUris.length} tracks added.`);
@@ -2178,7 +2193,7 @@ async function createSpotifyPlaylist() {
 }
 
 // ── Spotify API helper ──
-async function spotifyFetch(url, options = {}) {
+async function spotifyFetch(url, options = {}, _retried = false) {
   const res = await fetch(url, {
     ...options,
     headers: {
@@ -2191,6 +2206,12 @@ async function spotifyFetch(url, options = {}) {
     spotifyToken = null;
     localStorage.removeItem('sp_token');
     throw new Error('Spotify session expired — please reconnect');
+  }
+  if (res.status === 429 && !_retried) {
+    const retryAfter = parseInt(res.headers.get('Retry-After') || '5', 10);
+    try { logProgress(`⏳ Rate limited — waiting ${retryAfter}s...`); } catch(e) {}
+    await sleep((retryAfter + 1) * 1000);
+    return spotifyFetch(url, options, true);
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
