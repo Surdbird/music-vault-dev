@@ -2330,7 +2330,7 @@ function renderDigests() {
         <span class="digest-week-count">${count} link${count !== 1 ? 's' : ''} · ${platSummary}</span>
         <div class="digest-week-actions">
           ${ytTracks.length > 0 ? `<button class="btn-sm" style="border-color:var(--yt);color:var(--yt)" onclick="event.stopPropagation();openDigestYouTubePlaylist('${key}')" title="Open YouTube playlist for this week">▶ YT</button>` : ''}
-          ${spotifyTracks.length > 0 ? `<button class="btn-sm btn-sp" onclick="event.stopPropagation();createDigestSpotifyPlaylist('${key}', '${label}', '${dateRange}')" title="Create Spotify playlist for this week">SP ＋</button>` : ''}
+          ${spotifyTracks.length > 0 ? `<button class="btn-sm btn-sp" onclick="event.stopPropagation();createDigestSpotifyPlaylist('${key}')" title="Create Spotify playlist for this week">SP ＋</button>` : ''}
         </div>
         <span class="digest-toggle">▼</span>
       </div>
@@ -2353,12 +2353,24 @@ function toggleDigestWeek(key) {
   document.getElementById(`dw-${key}`)?.classList.toggle('open');
 }
 
-async function createDigestSpotifyPlaylist(weekKey, weekLabel, dateRange) {
+async function createDigestSpotifyPlaylist(weekKey) {
+  const { weekLabel, dateRange } = digestWeekMeta(weekKey);
   if (!spotifyToken) {
     openSpotifyModal('__digest__', weekKey, weekLabel, dateRange);
     return;
   }
   await _buildDigestPlaylist(weekKey, weekLabel, dateRange);
+}
+
+function digestWeekMeta(weekKey) {
+  const m = weekKey.match(/(\d{4})-W(\d+)/);
+  if (!m) return { weekLabel: weekKey, dateRange: '' };
+  const year = parseInt(m[1]), week = parseInt(m[2]);
+  const { monday, sunday } = getWeekRange(year, week);
+  return {
+    weekLabel: 'W' + week,
+    dateRange: formatDateShort(monday) + ' – ' + formatDateShort(sunday)
+  };
 }
 
 async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
