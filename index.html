@@ -2620,6 +2620,7 @@ function buildArtistMap() {
 }
 
 let artistsSearchQuery = '';
+let artistsSortBy = 'alpha';
 
 function renderArtistsView() {
   const container = document.getElementById('artistsContent');
@@ -2637,9 +2638,12 @@ function renderArtistsView() {
     return;
   }
 
-  // Sort by track count desc
-  const sorted = Object.entries(artistMap)
-    .sort(([, a], [, b]) => b.tracks.length - a.tracks.length);
+  // Sort based on user preference
+  const sorted = Object.entries(artistMap).sort(([nameA, dataA], [nameB, dataB]) => {
+    if (artistsSortBy === 'count') return dataB.tracks.length - dataA.tracks.length;
+    if (artistsSortBy === 'members') return dataB.members.size - dataA.members.size;
+    return nameA.localeCompare(nameB); // alpha default
+  });
 
   const ytCount = Object.values(artistMap).reduce((n, a) => n + a.tracks.filter(t => t.platform === 'youtube').length, 0);
   const spCount = Object.values(artistMap).reduce((n, a) => n + a.tracks.filter(t => t.platform === 'spotify').length, 0);
@@ -2650,11 +2654,14 @@ function renderArtistsView() {
       <div class="artists-header-sub">${total} artists · ${ytCount} YT · ${spCount} SP tracks identified</div>
     </div>
     <div class="artists-note">
-      ℹ Artists are extracted from track titles. Coverage improves as YouTube titles finish loading and Spotify titles are fetched.
+      ℹ Artists are extracted from YouTube and Spotify track titles. SP coverage grows as you browse member Spotify tracks.
     </div>
-    <div class="artists-search">
-      <input type="search" placeholder="Search artist..." style="width:100%;max-width:400px" 
+    <div class="artists-search" style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-bottom:1.5rem">
+      <input type="search" placeholder="Search artist..." style="flex:1;min-width:200px;max-width:400px" 
         oninput="artistsSearchQuery=this.value;renderArtistsView()" value="${escHtml(artistsSearchQuery)}">
+      <button class="pill ${artistsSortBy==='alpha'?'active':''}" onclick="artistsSortBy='alpha';renderArtistsView()" style="font-size:0.65rem">A–Z</button>
+      <button class="pill ${artistsSortBy==='count'?'active':''}" onclick="artistsSortBy='count';renderArtistsView()" style="font-size:0.65rem">Most shared</button>
+      <button class="pill ${artistsSortBy==='members'?'active':''}" onclick="artistsSortBy='members';renderArtistsView()" style="font-size:0.65rem">Most members</button>
     </div>
     <div class="artists-grid">`;
 
