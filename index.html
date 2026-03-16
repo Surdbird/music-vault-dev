@@ -1688,6 +1688,7 @@ function setPlatformFilter(key, btn) {
 // YOUTUBE TITLE FETCHING (oEmbed, no API key)
 // ──────────────────────────────────────────────
 async function processFetchQueue() {
+  return; // TEMP DISABLED for debugging
   if (isFetching || fetchQueue.length === 0) return;
   isFetching = true;
 
