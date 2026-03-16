@@ -655,6 +655,141 @@ textarea::placeholder { color: var(--muted); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── DIGESTS VIEW ── */
+.digest-week {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+.digest-week-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--rule);
+  background: var(--bg);
+}
+.digest-week-header:hover { background: #ede8df; }
+.digest-week-label {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--accent);
+  min-width: 4rem;
+}
+.digest-week-dates {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  flex: 1;
+}
+.digest-week-count {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.digest-week-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.digest-toggle {
+  font-size: 0.75rem;
+  color: var(--muted);
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.digest-week.open .digest-toggle { transform: rotate(180deg); }
+.digest-tracks {
+  display: none;
+  padding: 0.5rem 0;
+}
+.digest-week.open .digest-tracks { display: block; }
+.digest-track-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1.5rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.78rem;
+}
+.digest-track-row:last-child { border-bottom: none; }
+.digest-track-row:hover { background: rgba(0,0,0,0.02); }
+.digest-platform-badge {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.62rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 2px;
+  min-width: 2.8rem;
+  text-align: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.badge-youtube  { background: var(--yt-light); color: var(--yt); }
+.badge-spotify  { background: var(--sp-light); color: var(--sp); }
+.badge-applemusic { background: var(--am-light); color: var(--am); }
+.badge-bandcamp { background: var(--bc-light); color: var(--bc); }
+.digest-track-url {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink2);
+  text-decoration: none;
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.7rem;
+}
+.digest-track-url:hover { color: var(--accent); text-decoration: underline; }
+.digest-track-sender {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.65rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  max-width: 10rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+.digest-track-title {
+  flex: 1.5;
+  font-size: 0.75rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.digests-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.digest-header-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--ink);
+}
+.digest-header-title {
+  font-family: 'Syne', 'Helvetica Neue', sans-serif;
+  font-weight: 800;
+  font-size: 1.8rem;
+  letter-spacing: -0.02em;
+}
+.digest-header-sub {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 /* ── GENRE VIEW ── */
 .genre-card {
   background: var(--paper);
@@ -957,6 +1092,7 @@ textarea::placeholder { color: var(--muted); }
       <button class="pill am" onclick="setPlatformFilter('applemusic', this)">APPLE</button>
       <button class="pill bc" onclick="setPlatformFilter('bandcamp', this)">BANDCAMP</button>
       <button class="pill" id="genresPill" style="border-color:#6b4a8a;color:#6b4a8a" onclick="toggleGenreView(this)">GENRES</button>
+      <button class="pill" id="digestsPill" style="border-color:#c8401a;color:#c8401a" onclick="toggleDigestsView(this)">DIGESTS</button>
     </div>
   </div>
 </div>
@@ -1004,6 +1140,11 @@ textarea::placeholder { color: var(--muted); }
 <!-- GENRE VIEW -->
 <div class="genre-view" id="genreView" style="display:none;max-width:1200px;margin:0 auto;padding:0 3rem 4rem;">
   <div id="genreContent"></div>
+</div>
+
+<!-- DIGESTS VIEW -->
+<div class="digests-view" id="digestsView" style="display:none;max-width:1200px;margin:0 auto;padding:0 3rem 4rem;">
+  <div id="digestsContent"></div>
 </div>
 
 <!-- SPOTIFY MODAL -->
@@ -1400,6 +1541,13 @@ function filterMembers(q) {
 
 function selectMember(name) {
   activeMember = name;
+  // Hide digests view if open
+  if (digestsVisible) {
+    digestsVisible = false;
+    document.getElementById('digestsView').style.display = 'none';
+    document.getElementById('digestsPill').classList.remove('active');
+    document.getElementById('mainArea').style.display = 'grid';
+  }
   // Update sidebar
   document.querySelectorAll('.member-btn').forEach(b => {
     b.classList.toggle('active', b.querySelector('.member-name')?.textContent === name);
@@ -2023,6 +2171,266 @@ function openYouTubePlaylist(e, memberName) {
 
 
 // ──────────────────────────────────────────────
+// DIGESTS VIEW
+// ──────────────────────────────────────────────
+
+let digestsVisible = false;
+
+function toggleDigestsView(btn) {
+  const digestsView = document.getElementById('digestsView');
+  const mainArea = document.getElementById('mainArea');
+  const genreView = document.getElementById('genreView');
+  const genresPill = document.getElementById('genresPill');
+
+  digestsVisible = !digestsVisible;
+
+  if (digestsVisible) {
+    // Hide other views
+    mainArea.style.display = 'none';
+    genreView.style.display = 'none';
+    genresPill.classList.remove('active');
+
+    digestsView.style.display = 'block';
+    btn.classList.add('active');
+    renderDigests();
+  } else {
+    digestsView.style.display = 'none';
+    btn.classList.remove('active');
+    mainArea.style.display = 'grid';
+  }
+}
+
+// Parse a WhatsApp date string like "1/3/19", "12/03/2025", "03/12/25"
+// into a JS Date. WhatsApp uses D/M/YY or D/M/YYYY.
+function parseWADate(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.split(/[\/\.\-]/);
+  if (parts.length < 3) return null;
+  let day = parseInt(parts[0], 10);
+  let month = parseInt(parts[1], 10) - 1; // 0-indexed
+  let year = parseInt(parts[2], 10);
+  if (year < 100) year += 2000;
+  return new Date(year, month, day);
+}
+
+// Get ISO week number and year from a Date
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return { week: weekNo, year: d.getUTCFullYear() };
+}
+
+// Get Monday and Sunday dates for a given ISO week/year
+function getWeekRange(isoYear, isoWeek) {
+  // Jan 4 is always in week 1
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - (dayOfWeek - 1) + (isoWeek - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return { monday, sunday };
+}
+
+function formatDateShort(date) {
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderDigests() {
+  const container = document.getElementById('digestsContent');
+
+  if (!allData || Object.keys(allData).length === 0) {
+    container.innerHTML = '<div class="digests-empty">Load a WhatsApp chat first to see weekly digests.</div>';
+    return;
+  }
+
+  // Collect ALL links across all members, keyed by ISO week
+  // weekKey = "YYYY-WXX" e.g. "2024-W12"
+  const weekMap = {}; // weekKey -> { year, week, tracks: [{url, platform, sender, date, title}] }
+
+  for (const [memberName, platformData] of Object.entries(allData)) {
+    for (const [platform, tracks] of Object.entries(platformData)) {
+      for (const track of tracks) {
+        const date = parseWADate(track.date);
+        if (!date) continue;
+        const { week, year } = getISOWeek(date);
+        const key = `${year}-W${String(week).padStart(2, '0')}`;
+        if (!weekMap[key]) {
+          weekMap[key] = { year, week, tracks: [] };
+        }
+        weekMap[key].tracks.push({
+          url: track.url,
+          platform,
+          sender: memberName,
+          date: track.date,
+          time: track.time || '',
+          title: track.title || null,
+          sortDate: date
+        });
+      }
+    }
+  }
+
+  // Sort weeks newest first
+  const sortedWeeks = Object.entries(weekMap)
+    .sort(([a], [b]) => b.localeCompare(a));
+
+  if (sortedWeeks.length === 0) {
+    container.innerHTML = '<div class="digests-empty">No dated links found — make sure your chat has timestamps.</div>';
+    return;
+  }
+
+  const totalWeeks = sortedWeeks.length;
+  let html = `
+    <div class="digest-header-bar">
+      <div class="digest-header-title">WEEKLY DIGESTS</div>
+      <div class="digest-header-sub">${totalWeeks} week${totalWeeks !== 1 ? 's' : ''} of shared music</div>
+    </div>`;
+
+  for (const [key, data] of sortedWeeks) {
+    const { monday, sunday } = getWeekRange(data.year, data.week);
+    const dateRange = `${formatDateShort(monday)} – ${formatDateShort(sunday)}`;
+    const label = `W${data.week}`;
+    const count = data.tracks.length;
+
+    // Sort tracks within week chronologically
+    const sorted = [...data.tracks].sort((a, b) => a.sortDate - b.sortDate);
+
+    // Platform summary counts
+    const plats = { youtube: 0, spotify: 0, applemusic: 0, bandcamp: 0 };
+    for (const t of sorted) plats[t.platform]++;
+    const platSummary = Object.entries(plats)
+      .filter(([, n]) => n > 0)
+      .map(([p, n]) => `${n} ${p === 'applemusic' ? 'Apple' : p === 'youtube' ? 'YT' : p === 'spotify' ? 'SP' : 'BC'}`)
+      .join(' · ');
+
+    const trackRows = sorted.map(t => {
+      const shortUrl = t.url.replace(/^https?:\/\/(www\.)?/, '').slice(0, 55) + (t.url.length > 60 ? '…' : '');
+      const titleCell = t.title ? `<span class="digest-track-title">${escHtml(t.title)}</span>` : `<a class="digest-track-url" href="${escHtml(t.url)}" target="_blank" rel="noopener">${escHtml(shortUrl)}</a>`;
+      return `<div class="digest-track-row">
+        <span class="digest-platform-badge badge-${t.platform}">${t.platform === 'applemusic' ? 'APPLE' : t.platform.toUpperCase().slice(0,2)}</span>
+        ${titleCell}
+        <a class="digest-track-url" href="${escHtml(t.url)}" target="_blank" rel="noopener" style="max-width:180px;flex-shrink:0">${escHtml(shortUrl)}</a>
+        <span class="digest-track-sender">${escHtml(t.sender)}</span>
+      </div>`;
+    }).join('');
+
+    // Spotify tracks from this week
+    const spotifyTracks = sorted.filter(t => t.platform === 'spotify');
+
+    html += `
+    <div class="digest-week" id="dw-${key}">
+      <div class="digest-week-header" onclick="toggleDigestWeek('${key}')">
+        <span class="digest-week-label">${label}</span>
+        <span class="digest-week-dates">${dateRange}</span>
+        <span class="digest-week-count">${count} link${count !== 1 ? 's' : ''} · ${platSummary}</span>
+        <div class="digest-week-actions">
+          ${spotifyTracks.length > 0 ? `<button class="btn-sm btn-sp" onclick="event.stopPropagation();createDigestSpotifyPlaylist('${key}', '${label}', '${dateRange}')" title="Create Spotify playlist for this week">SP ＋</button>` : ''}
+        </div>
+        <span class="digest-toggle">▼</span>
+      </div>
+      <div class="digest-tracks">
+        ${trackRows}
+      </div>
+    </div>`;
+  }
+
+  container.innerHTML = html;
+
+  // Auto-open the most recent week
+  if (sortedWeeks.length > 0) {
+    const firstKey = sortedWeeks[0][0];
+    document.getElementById(`dw-${firstKey}`)?.classList.add('open');
+  }
+}
+
+function toggleDigestWeek(key) {
+  document.getElementById(`dw-${key}`)?.classList.toggle('open');
+}
+
+async function createDigestSpotifyPlaylist(weekKey, weekLabel, dateRange) {
+  if (!spotifyToken) {
+    openSpotifyModal('__digest__', weekKey, weekLabel, dateRange);
+    return;
+  }
+  await _buildDigestPlaylist(weekKey, weekLabel, dateRange);
+}
+
+async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
+  // Gather spotify URIs for this week
+  const weekMap = buildWeekMap();
+  const weekData = weekMap[weekKey];
+  if (!weekData) return;
+
+  const spotifyTracks = weekData.tracks.filter(t => t.platform === 'spotify');
+  if (!spotifyTracks.length) { toast('No Spotify tracks this week'); return; }
+
+  const playlistName = `The Vault — ${weekLabel} (${dateRange})`;
+
+  // Show modal progress
+  const btn = document.querySelector(`#dw-${weekKey} .btn-sp`);
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '…'; btn.disabled = true; }
+
+  try {
+    // Create playlist
+    const pl = await spotifyFetch(`https://api.spotify.com/v1/users/${spotifyUserId}/playlists`, {
+      method: 'POST',
+      body: JSON.stringify({ name: playlistName, description: `All music shared in The Vault during ${dateRange}`, public: false })
+    });
+
+    // Resolve track URIs
+    const uris = [];
+    for (const track of spotifyTracks) {
+      const uri = extractSpotifyUri(track.url);
+      if (uri) uris.push(uri);
+    }
+
+    // Add in batches of 100
+    for (let i = 0; i < uris.length; i += 100) {
+      await spotifyFetch(`https://api.spotify.com/v1/playlists/${pl.id}/tracks`, {
+        method: 'POST',
+        body: JSON.stringify({ uris: uris.slice(i, i + 100) })
+      });
+    }
+
+    if (btn) { btn.textContent = '✓ Created'; btn.style.background = 'var(--sp)'; btn.style.color = '#fff'; }
+    toast(`✓ Created "${playlistName}" with ${uris.length} tracks`);
+  } catch (e) {
+    if (btn) { btn.textContent = origText; btn.disabled = false; }
+    toast('Error creating playlist: ' + e.message);
+  }
+}
+
+// Helper: rebuild week map on demand
+function buildWeekMap() {
+  const weekMap = {};
+  for (const [memberName, platformData] of Object.entries(allData)) {
+    for (const [platform, tracks] of Object.entries(platformData)) {
+      for (const track of tracks) {
+        const date = parseWADate(track.date);
+        if (!date) continue;
+        const { week, year } = getISOWeek(date);
+        const key = `${year}-W${String(week).padStart(2, '0')}`;
+        if (!weekMap[key]) weekMap[key] = { year, week, tracks: [] };
+        weekMap[key].tracks.push({ ...track, platform, sender: memberName, sortDate: date });
+      }
+    }
+  }
+  return weekMap;
+}
+
+function extractSpotifyUri(url) {
+  // Convert https://open.spotify.com/track/ID -> spotify:track:ID
+  const m = url.match(/spotify\.com\/(track|album|episode)\/([A-Za-z0-9]+)/);
+  if (m) return `spotify:${m[1]}:${m[2]}`;
+  return null;
+}
+
+// ──────────────────────────────────────────────
 // GENRE VIEW
 // ──────────────────────────────────────────────
 
@@ -2046,6 +2454,12 @@ let genreFetchDone = false;
 let isGenreView = false;
 
 function toggleGenreView(btn) {
+  // If digests are open, close them first
+  if (digestsVisible) {
+    digestsVisible = false;
+    document.getElementById('digestsView').style.display = 'none';
+    document.getElementById('digestsPill').classList.remove('active');
+  }
   isGenreView = !isGenreView;
   const genreView = document.getElementById('genreView');
   const mainArea = document.getElementById('mainArea');
