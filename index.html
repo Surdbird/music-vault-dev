@@ -655,6 +655,14 @@ textarea::placeholder { color: var(--muted); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.btn-sp-update {
+  border-color: var(--sp);
+  color: white;
+  background: var(--sp);
+  font-size: 0.72rem;
+}
+.btn-sp-update:hover { opacity: 0.85; }
+
 /* ── DIGESTS VIEW ── */
 .digest-week {
   background: var(--paper);
@@ -1585,7 +1593,7 @@ function renderMemberContent(name) {
       <div class="member-actions">
         <button class="btn-sm ink" onclick="exportCSV('${escAttr(name)}')">↓ CSV</button>
         <button class="btn-sm ink" onclick="copyAllLinks('${escAttr(name)}')">⎘ Copy All</button>
-        <button class="btn-sm" style="border-color:var(--sp);color:var(--sp)" onclick="openSpotifyModal('${escAttr(name)}')">◎ Spotify Playlist</button>
+        ${memberPlaylistState(name)}
       </div>
     </div>
     <div class="platform-blocks">${platformsHtml}</div>
@@ -1765,6 +1773,160 @@ let spotifyUserId = null;
 let spotifyUserName = null;
 let currentModalMember = null;
 const SPOTIFY_SCOPES = 'playlist-modify-public';
+
+// ──────────────────────────────────────────────
+// MEMBER PLAYLIST STORAGE
+// Key: vault_pl_{memberName} → { playlistId, updatedAt (ISO string) }
+// ──────────────────────────────────────────────
+
+function memberPlaylistKey(memberName) {
+  return 'vault_pl_' + btoa(unescape(encodeURIComponent(memberName))).replace(/=/g,'');
+}
+
+function saveMemberPlaylist(memberName, playlistId) {
+  const rec = { playlistId, updatedAt: new Date().toISOString() };
+  try { localStorage.setItem(memberPlaylistKey(memberName), JSON.stringify(rec)); } catch(e) {}
+}
+
+function loadMemberPlaylist(memberName) {
+  try {
+    const raw = localStorage.getItem(memberPlaylistKey(memberName));
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+// Returns the right button HTML for a member — Create or Update
+function memberPlaylistState(name) {
+  const rec = loadMemberPlaylist(name);
+  if (rec) {
+    const since = new Date(rec.updatedAt);
+    const sinceStr = since.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+    return `<button class="btn-sm btn-sp-update" onclick="updateSpotifyPlaylist('${escAttr(name)}')" title="Last updated ${sinceStr}">↑ Update Playlist</button>`;
+  }
+  return `<button class="btn-sm" style="border-color:var(--sp);color:var(--sp)" onclick="openSpotifyModal('${escAttr(name)}')">◎ Spotify Playlist</button>`;
+}
+
+// ── Update an existing member playlist with new tracks ──
+async function updateSpotifyPlaylist(memberName) {
+  if (!spotifyToken) {
+    // Need to auth first — open modal in a special update mode
+    currentModalMember = memberName;
+    openSpotifyModal(memberName, true);
+    return;
+  }
+
+  const rec = loadMemberPlaylist(memberName);
+  if (!rec) { openSpotifyModal(memberName); return; }
+
+  const data = allData[memberName];
+  if (!data) { toast('Member data not found'); return; }
+
+  const lastUpdated = new Date(rec.updatedAt);
+  const playlistId = rec.playlistId;
+
+  // Find Spotify tracks shared AFTER last update
+  const allSpotify = data.spotify || [];
+  const newTracks = allSpotify.filter(t => {
+    const d = parseWADate(t.date);
+    return d && d > lastUpdated;
+  });
+
+  if (newTracks.length === 0) {
+    toast(`No new Spotify tracks since ${lastUpdated.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})}`);
+    return;
+  }
+
+  // Open modal to show progress
+  currentModalMember = memberName;
+  document.getElementById('modalSub').textContent =
+    `Adding ${newTracks.length} new track${newTracks.length !== 1 ? 's' : ''} shared since ${lastUpdated.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})}.`;
+  document.getElementById('spotifyModal').classList.remove('hidden');
+  document.getElementById('setupFields').style.display = 'none';
+  document.getElementById('connectedFields').style.display = 'block';
+  document.getElementById('spUserName').textContent = spotifyUserName || '...';
+  document.getElementById('playlistNameInput2').value = `${memberName} — The Vault`;
+
+  const actionBtn = document.getElementById('modalActionBtn');
+  actionBtn.disabled = true;
+  actionBtn.textContent = 'Updating…';
+  const progressWrap = document.getElementById('progressWrap');
+  progressWrap.classList.add('visible');
+  logProgress(`Resolving ${newTracks.length} new Spotify links...`);
+  setProgress(0, newTracks.length);
+
+  try {
+    // Resolve new tracks to URIs (expands albums/playlists)
+    const newUris = await resolveSpotifyUris(newTracks.map(t => t.url), (done, total) => {
+      setProgress(done, total);
+    });
+
+    if (newUris.length === 0) {
+      toast('No valid new track URIs found');
+      actionBtn.disabled = false;
+      actionBtn.textContent = '◎ Create Playlist →';
+      return;
+    }
+
+    // Fetch existing tracks in playlist to avoid duplicates
+    logProgress(`Checking ${newUris.length} tracks against existing playlist...`);
+    const existingUris = new Set();
+    let next = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=next,items(track(uri))`;
+    while (next) {
+      const page = await spotifyFetch(next);
+      for (const item of (page.items || [])) {
+        if (item.track?.uri) existingUris.add(item.track.uri);
+      }
+      next = page.next || null;
+      if (next) await sleep(150);
+    }
+
+    const toAdd = newUris.filter(u => !existingUris.has(u));
+    if (toAdd.length === 0) {
+      toast('All new tracks are already in the playlist');
+      saveMemberPlaylist(memberName, playlistId); // update timestamp
+      closeSpotifyModal();
+      renderMemberContent(memberName);
+      return;
+    }
+
+    logProgress(`Adding ${toAdd.length} new tracks (${newUris.length - toAdd.length} already present)...`);
+    setProgress(0, toAdd.length);
+
+    // Add in batches of 100
+    const BATCH = 100;
+    let added = 0;
+    for (let i = 0; i < toAdd.length; i += BATCH) {
+      const batch = toAdd.slice(i, i + BATCH);
+      await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlistId}/items`, {
+        method: 'POST',
+        body: JSON.stringify({ uris: batch })
+      });
+      added += batch.length;
+      setProgress(added, toAdd.length);
+      logProgress(`Added ${added} / ${toAdd.length} tracks`);
+      if (i + BATCH < toAdd.length) await sleep(300);
+    }
+
+    logProgress(`✓ Done! ${toAdd.length} tracks added.`);
+    document.getElementById('progressText').textContent = '✓ Playlist updated!';
+
+    // Save updated timestamp
+    saveMemberPlaylist(memberName, playlistId);
+
+    actionBtn.textContent = '↗ Open Playlist';
+    actionBtn.disabled = false;
+    actionBtn.onclick = () => window.open(`https://open.spotify.com/playlist/${playlistId}`, '_blank');
+
+    renderMemberContent(memberName);
+    toast(`✓ Updated playlist with ${toAdd.length} new tracks`);
+
+  } catch(e) {
+    logProgress(`✗ Error: ${e.message}`);
+    actionBtn.disabled = false;
+    actionBtn.textContent = 'Retry';
+    toast('Update failed: ' + e.message);
+  }
+}
 
 // Called when user clicks "◎ Spotify Playlist" button
 function openSpotifyModal(memberName) {
@@ -1995,9 +2157,15 @@ async function createSpotifyPlaylist() {
 
     document.getElementById('progressText').textContent = '✓ Playlist created!';
 
+    // Save playlist ID + timestamp so we can update later
+    saveMemberPlaylist(memberName, playlist.id);
+
     actionBtn.textContent = '↗ Open Playlist';
     actionBtn.disabled = false;
     actionBtn.onclick = () => window.open(`https://open.spotify.com/playlist/${playlist.id}`, '_blank');
+
+    // Refresh the button in the member header
+    renderMemberContent(memberName);
 
     toast(`Playlist "${playlistName}" created with ${trackUris.length} tracks!`);
 
