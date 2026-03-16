@@ -2158,12 +2158,8 @@ async function createSpotifyPlaylist() {
 
   try {
     let playlist;
-    const existingId = ''; // already handled above
-    let playlist;
-    if (existingId) {
-      playlist = {id: existingId};
-      saveMemberPlaylist(memberName, existingId); // Link this ID to the member
-      logProgress(`Using existing playlist ${existingId}. Adding ${trackUris.length} tracks...`);
+    if (false) {
+      // existingId path now handled before this point
     } else {
       playlist = await spotifyFetch(`https://api.spotify.com/v1/me/playlists`, {
         method: 'POST',
