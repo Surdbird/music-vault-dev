@@ -1986,6 +1986,13 @@ async function createSpotifyPlaylist() {
     }
 
     logProgress(`✓ Done! ${trackUris.length} tracks added.`);
+
+    // Follow the playlist so it appears in Spotify library
+    try {
+      await spotifyFetch(`https://api.spotify.com/v1/playlists/${playlist.id}/followers`, { method: 'PUT', body: JSON.stringify({ public: false }) });
+      logProgress(`✓ Added to your Spotify library.`);
+    } catch(e) { /* non-fatal */ }
+
     document.getElementById('progressText').textContent = '✓ Playlist created!';
 
     actionBtn.textContent = '↗ Open Playlist';
@@ -2411,6 +2418,11 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
       });
       if (i + 100 < uris.length) await sleep(300);
     }
+
+    // Follow the playlist so it appears in Spotify library
+    try {
+      await spotifyFetch(`https://api.spotify.com/v1/playlists/${pl.id}/followers`, { method: 'PUT', body: JSON.stringify({ public: false }) });
+    } catch(e) { /* non-fatal */ }
 
     if (btn) {
       btn.textContent = '✓ Open';
