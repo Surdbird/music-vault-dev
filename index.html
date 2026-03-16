@@ -1183,7 +1183,7 @@ textarea::placeholder { color: var(--muted); }
       </div>
       <div class="modal-field" style="margin-top:0.75rem">
         <label class="modal-label">EXISTING PLAYLIST ID (optional — skip create step)</label>
-        <input class="modal-input" id="existingPlaylistId" type="text" placeholder="paste playlist ID e.g. 0EI8xY3s9rxjkNiJ50grq8">
+        <input class="modal-input" id="existingPlaylistId" type="text" placeholder="paste playlist ID or full URL" oninput="onExistingIdInput(this.value)">
         <span class="modal-hint">Paste from Spotify URL: open.spotify.com/playlist/<strong>THIS_PART</strong></span>
       </div>
       <div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
@@ -1874,13 +1874,14 @@ async function updateSpotifyPlaylist(memberName) {
     // Fetch existing tracks in playlist to avoid duplicates
     logProgress(`Checking ${newUris.length} tracks against existing playlist...`);
     const existingUris = new Set();
-    let next = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=next,items(track(uri))`;
+    let next = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100`;
     while (next) {
       const page = await spotifyFetch(next);
-      for (const item of (page.items || [])) {
-        if (item.track?.uri) existingUris.add(item.track.uri);
+      const items = Array.isArray(page?.items) ? page.items : [];
+      for (const item of items) {
+        if (item?.track?.uri) existingUris.add(item.track.uri);
       }
-      next = page.next || null;
+      next = page?.next || null;
       if (next) await sleep(150);
     }
 
@@ -1978,13 +1979,25 @@ function disconnectSpotify() {
   toast('Disconnected — reconnect for fresh permissions');
 }
 
+function onExistingIdInput(val) {
+  const btn = document.getElementById('modalActionBtn');
+  if (!btn) return;
+  const hasId = val.trim().length > 0;
+  if (hasId) {
+    btn.textContent = '↑ Update Playlist →';
+  } else {
+    btn.textContent = '◎ Create Playlist →';
+  }
+}
+
 function linkExistingPlaylist() {
   const memberName = document.getElementById('modalActionBtn').dataset.member || currentModalMember;
-  const existingId = (document.getElementById('existingPlaylistId')?.value || '').trim();
-  if (!existingId) {
-    toast('Paste the playlist ID first');
-    return;
-  }
+  const raw = (document.getElementById('existingPlaylistId')?.value || '').trim();
+  if (!raw) { toast('Paste the playlist ID or URL first'); return; }
+  // Accept full URL or just the ID
+  const urlMatch = raw.match(/playlist\/([a-zA-Z0-9]+)/);
+  const existingId = urlMatch ? urlMatch[1] : raw;
+  if (!existingId) { toast('Could not find playlist ID'); return; }
   saveMemberPlaylist(memberName, existingId);
   renderMemberContent(memberName);
   closeSpotifyModal();
@@ -2112,6 +2125,19 @@ async function createSpotifyPlaylist() {
   actionBtn.disabled = true;
   const progressWrap = document.getElementById('progressWrap');
   progressWrap.classList.add('visible');
+  // If an existing playlist ID is provided, route to update flow
+  const rawExistingId = (document.getElementById('existingPlaylistId')?.value||'').trim();
+  const existingIdMatch = rawExistingId.match(/playlist\/([a-zA-Z0-9]+)/);
+  const existingId = existingIdMatch ? existingIdMatch[1] : rawExistingId;
+
+  if (existingId) {
+    // Save the link and run update flow instead of full create
+    saveMemberPlaylist(memberName, existingId);
+    closeSpotifyModal();
+    await updateSpotifyPlaylist(memberName);
+    return;
+  }
+
   logProgress(`Resolving ${spotifyTracks.length} Spotify links (expanding albums & playlists)...`);
   setProgress(0, spotifyTracks.length);
 
@@ -2131,7 +2157,8 @@ async function createSpotifyPlaylist() {
   setProgress(0, trackUris.length);
 
   try {
-    const existingId = (document.getElementById('existingPlaylistId')?.value||'').trim();
+    let playlist;
+    const existingId = ''; // already handled above
     let playlist;
     if (existingId) {
       playlist = {id: existingId};
