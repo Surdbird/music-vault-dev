@@ -663,6 +663,95 @@ textarea::placeholder { color: var(--muted); }
 }
 .btn-sp-update:hover { opacity: 0.85; }
 
+/* ── ARTISTS VIEW ── */
+.artists-header-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--ink);
+}
+.artists-header-title {
+  font-family: 'Syne', 'Helvetica Neue', sans-serif;
+  font-weight: 800;
+  font-size: 1.8rem;
+  letter-spacing: -0.02em;
+}
+.artists-header-sub {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.artists-search {
+  margin-bottom: 1.5rem;
+}
+.artists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.artist-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.artist-card:hover { border-color: var(--accent); }
+.artist-card.expanded { border-color: var(--accent); }
+.artist-card-name {
+  font-family: 'Syne', 'Helvetica Neue', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.artist-card-meta {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.65rem;
+  color: var(--muted);
+  display: flex;
+  gap: 0.75rem;
+}
+.artist-card-members {
+  margin-top: 0.75rem;
+  display: none;
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.68rem;
+  color: var(--ink2);
+  border-top: 1px solid var(--rule);
+  padding-top: 0.6rem;
+}
+.artist-card.expanded .artist-card-members { display: block; }
+.artist-member-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.artist-member-row:last-child { border-bottom: none; }
+.artists-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.artists-note {
+  font-family: 'Syne Mono', 'Courier New', monospace;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
 /* ── DIGESTS VIEW ── */
 .digest-week {
   background: var(--paper);
@@ -1101,6 +1190,7 @@ textarea::placeholder { color: var(--muted); }
       <button class="pill bc" onclick="setPlatformFilter('bandcamp', this)">BANDCAMP</button>
       <button class="pill" id="genresPill" style="border-color:#6b4a8a;color:#6b4a8a" onclick="toggleGenreView(this)">GENRES</button>
       <button class="pill" id="digestsPill" style="border-color:#c8401a;color:#c8401a" onclick="toggleDigestsView(this)">DIGESTS</button>
+      <button class="pill" id="artistsPill" style="border-color:#8a6a1a;color:#8a6a1a" onclick="toggleArtistsView(this)">ARTISTS</button>
     </div>
   </div>
 </div>
@@ -1153,6 +1243,11 @@ textarea::placeholder { color: var(--muted); }
 <!-- DIGESTS VIEW -->
 <div class="digests-view" id="digestsView" style="display:none;max-width:1200px;margin:0 auto;padding:0 3rem 4rem;">
   <div id="digestsContent"></div>
+</div>
+
+<!-- ARTISTS VIEW -->
+<div class="artists-view" id="artistsView" style="display:none;max-width:1200px;margin:0 auto;padding:0 3rem 4rem;">
+  <div id="artistsContent"></div>
 </div>
 
 <!-- SPOTIFY MODAL -->
@@ -1550,11 +1645,17 @@ function filterMembers(q) {
 
 function selectMember(name) {
   activeMember = name;
-  // Hide digests view if open
+  // Hide digests/artists view if open
   if (digestsVisible) {
     digestsVisible = false;
     document.getElementById('digestsView').style.display = 'none';
     document.getElementById('digestsPill').classList.remove('active');
+    document.getElementById('mainArea').style.display = 'grid';
+  }
+  if (artistsVisible) {
+    artistsVisible = false;
+    document.getElementById('artistsView').style.display = 'none';
+    document.getElementById('artistsPill').classList.remove('active');
     document.getElementById('mainArea').style.display = 'grid';
   }
   // Update sidebar
@@ -2438,6 +2539,172 @@ function copyDigestLinks(weekKey, platform) {
 
 
 // ──────────────────────────────────────────────
+// ARTISTS VIEW
+// ──────────────────────────────────────────────
+
+let artistsVisible = false;
+
+function toggleArtistsView(btn) {
+  const artistsView = document.getElementById('artistsView');
+  const mainArea = document.getElementById('mainArea');
+  const genreView = document.getElementById('genreView');
+  const digestsView = document.getElementById('digestsView');
+
+  artistsVisible = !artistsVisible;
+
+  if (artistsVisible) {
+    mainArea.style.display = 'none';
+    genreView.style.display = 'none';
+    digestsView.style.display = 'none';
+    document.getElementById('genresPill').classList.remove('active');
+    document.getElementById('digestsPill').classList.remove('active');
+    artistsView.style.display = 'block';
+    btn.classList.add('active');
+    renderArtistsView();
+  } else {
+    artistsView.style.display = 'none';
+    btn.classList.remove('active');
+    mainArea.style.display = 'grid';
+  }
+}
+
+// Extract artist name from a title string like "Artist — Song" or "Artist: Song"
+function extractArtistFromTitle(title) {
+  if (!title) return null;
+  // Common separators: —, -, |, :, ft., feat.
+  const sep = title.match(/^(.+?)\s*(?:—|-\s|\|\s*|:\s)\s*(.+)$/);
+  if (sep) {
+    const artist = sep[1].trim();
+    // Filter out garbage (too long, looks like a sentence, all caps channel name)
+    if (artist.length > 0 && artist.length < 60 && !artist.includes('http')) {
+      return artist;
+    }
+  }
+  return null;
+}
+
+function buildArtistMap() {
+  // artistName -> { tracks: [{url, platform, member}], members: Set }
+  const artistMap = {};
+
+  const addArtist = (artistName, url, platform, memberName) => {
+    if (!artistName || artistName.length < 2) return;
+    // Normalise: trim, collapse spaces
+    const key = artistName.trim().replace(/\s+/g, ' ');
+    if (!artistMap[key]) artistMap[key] = { tracks: [], members: new Set() };
+    artistMap[key].tracks.push({ url, platform, member: memberName });
+    artistMap[key].members.add(memberName);
+  };
+
+  for (const [memberName, platformData] of Object.entries(allData)) {
+    // YouTube — use title cache
+    for (const track of (platformData.youtube || [])) {
+      const title = titleCache[track.url];
+      const artist = extractArtistFromTitle(title);
+      if (artist) addArtist(artist, track.url, 'youtube', memberName);
+    }
+
+    // Spotify — use spotifyTitleCache (stored as "Artist — Song")
+    for (const track of (platformData.spotify || [])) {
+      const trackId = track.url.match(/\/track\/([a-zA-Z0-9]+)/)?.[1];
+      if (trackId && spotifyTitleCache[trackId]) {
+        const artist = extractArtistFromTitle(spotifyTitleCache[trackId]);
+        if (artist) addArtist(artist, track.url, 'spotify', memberName);
+      }
+    }
+
+    // Apple Music & Bandcamp — no title cache, skip for now
+  }
+
+  return artistMap;
+}
+
+let artistsSearchQuery = '';
+
+function renderArtistsView() {
+  const container = document.getElementById('artistsContent');
+
+  if (!allData || Object.keys(allData).length === 0) {
+    container.innerHTML = '<div class="artists-empty">Load a WhatsApp chat first.</div>';
+    return;
+  }
+
+  const artistMap = buildArtistMap();
+  const total = Object.keys(artistMap).length;
+
+  if (total === 0) {
+    container.innerHTML = '<div class="artists-empty">No artist data yet — titles are still loading. Try again in a moment.</div>';
+    return;
+  }
+
+  // Sort by track count desc
+  const sorted = Object.entries(artistMap)
+    .sort(([, a], [, b]) => b.tracks.length - a.tracks.length);
+
+  const ytCount = Object.values(artistMap).reduce((n, a) => n + a.tracks.filter(t => t.platform === 'youtube').length, 0);
+  const spCount = Object.values(artistMap).reduce((n, a) => n + a.tracks.filter(t => t.platform === 'spotify').length, 0);
+
+  let html = `
+    <div class="artists-header-bar">
+      <div class="artists-header-title">ARTISTS</div>
+      <div class="artists-header-sub">${total} artists · ${ytCount} YT · ${spCount} SP tracks identified</div>
+    </div>
+    <div class="artists-note">
+      ℹ Artists are extracted from track titles. Coverage improves as YouTube titles finish loading and Spotify titles are fetched.
+    </div>
+    <div class="artists-search">
+      <input type="search" placeholder="Search artist..." style="width:100%;max-width:400px" 
+        oninput="artistsSearchQuery=this.value;renderArtistsView()" value="${escHtml(artistsSearchQuery)}">
+    </div>
+    <div class="artists-grid">`;
+
+  const filtered = artistsSearchQuery
+    ? sorted.filter(([name]) => name.toLowerCase().includes(artistsSearchQuery.toLowerCase()))
+    : sorted;
+
+  for (const [name, data] of filtered.slice(0, 200)) {
+    const trackCount = data.tracks.length;
+    const memberCount = data.members.size;
+    const platforms = [...new Set(data.tracks.map(t => t.platform))];
+    const platBadges = platforms.map(p => {
+      const colors = { youtube: 'var(--yt)', spotify: 'var(--sp)', applemusic: 'var(--am)', bandcamp: 'var(--bc)' };
+      const labels = { youtube: 'YT', spotify: 'SP', applemusic: 'AM', bandcamp: 'BC' };
+      return `<span style="color:${colors[p]}">${labels[p]}</span>`;
+    }).join(' ');
+
+    const memberRows = [...data.members].map(m => {
+      const mTracks = data.tracks.filter(t => t.member === m);
+      return `<div class="artist-member-row">
+        <span>${escHtml(m)}</span>
+        <span>${mTracks.length} track${mTracks.length !== 1 ? 's' : ''}</span>
+      </div>`;
+    }).join('');
+
+    const safeId = 'ac-' + name.replace(/[^a-zA-Z0-9]/g, '_');
+    html += `
+      <div class="artist-card" id="${safeId}" onclick="this.classList.toggle('expanded')">
+        <div class="artist-card-name" title="${escHtml(name)}">${escHtml(name)}</div>
+        <div class="artist-card-meta">
+          <span>${trackCount} track${trackCount !== 1 ? 's' : ''}</span>
+          <span>${memberCount} member${memberCount !== 1 ? 's' : ''}</span>
+          <span>${platBadges}</span>
+        </div>
+        <div class="artist-card-members">${memberRows}</div>
+      </div>`;
+  }
+
+  if (filtered.length > 200) {
+    html += `<div class="artist-card" style="display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:monospace;font-size:0.75rem">
+      +${filtered.length - 200} more — search to filter
+    </div>`;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+
+// ──────────────────────────────────────────────
 // DIGESTS VIEW
 // ──────────────────────────────────────────────
 
@@ -2948,21 +3215,6 @@ async function buildGenreData() {
 
   const members = Object.keys(allData).filter(m => allData[m].spotify?.length > 0);
 
-  // Step 1: Collect up to 3 track IDs per member
-  const memberTrackIds = {}; // memberName -> [trackId, ...]
-  for (const memberName of members) {
-    const tracks = allData[memberName].spotify || [];
-    const ids = tracks
-      .map(t => t.url.match(/\/track\/([a-zA-Z0-9]+)/)?.[1])
-      .filter(Boolean)
-      .slice(0, 3);
-    if (ids.length) memberTrackIds[memberName] = ids;
-  }
-
-  // Flatten all track IDs (deduplicated)
-  const allTrackIds = [...new Set(Object.values(memberTrackIds).flat())];
-  const totalTracks = allTrackIds.length;
-
   const updateProgress = (msg, pct) => {
     const fill = document.getElementById('genreProgressFill');
     const txt = document.getElementById('genreProgressText');
@@ -2970,7 +3222,27 @@ async function buildGenreData() {
     if (txt) txt.textContent = msg;
   };
 
-  updateProgress(`Fetching ${totalTracks} tracks in batches...`, 5);
+  // Step 1: Collect 1 track ID per member (minimise API calls)
+  // Pick a track from the middle of their list for variety
+  const memberTrackIds = {};
+  for (const memberName of members) {
+    const tracks = allData[memberName].spotify || [];
+    const trackUrls = tracks.map(t => t.url).filter(u => u.includes('/track/'));
+    if (!trackUrls.length) continue;
+    // Pick one from middle
+    const pick = trackUrls[Math.floor(trackUrls.length / 2)];
+    const id = pick.match(/\/track\/([a-zA-Z0-9]+)/)?.[1];
+    if (id) memberTrackIds[memberName] = [id];
+  }
+
+  // Flatten all track IDs (deduplicated)
+  const allTrackIds = [...new Set(Object.values(memberTrackIds).flat())];
+  const totalTracks = allTrackIds.length;
+
+  updateProgress(`Waiting for Spotify rate limit to clear...`, 2);
+  await sleep(2000); // Initial pause to avoid rate limits from recent operations
+
+  updateProgress(`Fetching genres for ${members.length} members (${totalTracks} tracks)...`, 5);
 
   // Step 2: Batch fetch tracks (50 at a time) to get artist IDs
   const trackArtistMap = {}; // trackId -> artistId
