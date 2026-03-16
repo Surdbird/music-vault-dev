@@ -2879,7 +2879,15 @@ const GENRE_MAP = {
   'Other': []
 };
 
-let genreData = {};  // { broadGenre: { subGenre: { memberName: [trackUrls] } } }
+let genreData = {};  // { broadGenre: { subGenre: { memberName: count } } }
+// Restore cached genre data on load
+try {
+  const cached = localStorage.getItem('vault_genres');
+  if (cached) {
+    genreData = JSON.parse(cached);
+    genreFetchDone = Object.keys(genreData).length > 0;
+  }
+} catch(e) {}
 let genreFetchDone = false;
 let isGenreView = false;
 
@@ -2977,10 +2985,13 @@ async function buildGenreData() {
           trackArtistMap[track.id] = track.artists[0].id;
         }
       }
-    } catch(e) { /* skip batch */ }
+    } catch(e) {
+      console.warn('Track batch error:', e.message);
+      if (e.message?.includes('429')) await sleep(3000);
+    }
     updateProgress(`Fetched tracks ${Math.min(i+50, allTrackIds.length)}/${totalTracks}...`, 
       5 + Math.round(i / allTrackIds.length * 35));
-    await sleep(300);
+    await sleep(500);
   }
 
   // Step 3: Batch fetch artists (50 at a time) to get genres
@@ -2997,10 +3008,13 @@ async function buildGenreData() {
       for (const artist of (data.artists || [])) {
         if (artist?.id) artistGenreMap[artist.id] = artist.genres || [];
       }
-    } catch(e) { /* skip batch */ }
+    } catch(e) {
+      console.warn('Artist batch error:', e.message);
+      if (e.message?.includes('429')) await sleep(3000);
+    }
     updateProgress(`Fetched artists ${Math.min(i+50, allArtistIds.length)}/${allArtistIds.length}...`,
       40 + Math.round(i / allArtistIds.length * 50));
-    await sleep(300);
+    await sleep(500);
   }
 
   // Step 4: Build genreData from member -> trackIds -> artistId -> genres
@@ -3019,8 +3033,11 @@ async function buildGenreData() {
   }
 
   updateProgress('Done!', 100);
-  try { localStorage.setItem('vault_genres', JSON.stringify(genreData)); } catch(e) {}
-  genreFetchDone = true;
+  // Save even partial results
+  if (Object.keys(genreData).length > 0) {
+    try { localStorage.setItem('vault_genres', JSON.stringify(genreData)); } catch(e) {}
+    genreFetchDone = true;
+  }
 }
 
 function getBroadGenre(genres) {
@@ -3044,7 +3061,9 @@ function renderGenreView() {
   });
 
   if (!sorted.length) {
-    content.innerHTML = '<div class="genre-loading">No genre data collected — Spotify rate limits may have blocked requests.<br><br>Try clicking GENRES again to retry.</div>';
+    content.innerHTML = '<div class="genre-loading">No genre data collected — Spotify rate limits may have blocked requests.<br><br>' +
+      (Object.keys(genreData).length > 0 ? 'Showing cached data from previous run.' : 'Try clicking GENRES again to retry.') +
+      '</div>';
     genreFetchDone = false;
     return;
   }
