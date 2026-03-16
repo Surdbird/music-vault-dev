@@ -1688,7 +1688,6 @@ function setPlatformFilter(key, btn) {
 // YOUTUBE TITLE FETCHING (oEmbed, no API key)
 // ──────────────────────────────────────────────
 async function processFetchQueue() {
-  return; // TEMP DISABLED for debugging
   if (isFetching || fetchQueue.length === 0) return;
   isFetching = true;
 
@@ -1824,13 +1823,15 @@ async function updateSpotifyPlaylist(memberName) {
   if (!data) { toast('Member data not found'); return; }
 
   const lastUpdated = new Date(rec.updatedAt);
+  // Strip time — compare date only so tracks posted on the same day aren't missed
+  const lastUpdatedDateOnly = new Date(lastUpdated.getFullYear(), lastUpdated.getMonth(), lastUpdated.getDate());
   const playlistId = rec.playlistId;
 
-  // Find Spotify tracks shared AFTER last update
+  // Find Spotify tracks shared ON OR AFTER last update date
   const allSpotify = data.spotify || [];
   const newTracks = allSpotify.filter(t => {
     const d = parseWADate(t.date);
-    return d && d > lastUpdated;
+    return d && d >= lastUpdatedDateOnly;
   });
 
   if (newTracks.length === 0) {
@@ -2594,7 +2595,7 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
   if (!weekData) return;
 
   const spotifyTracks = weekData.tracks.filter(t => t.platform === 'spotify');
-  console.log('[Vault] W digest SP tracks:', spotifyTracks.length, spotifyTracks.map(t => t.url));
+
   if (!spotifyTracks.length) { toast('No Spotify tracks this week'); return; }
 
   const playlistName = `The Vault — ${weekLabel} (${dateRange})`;
@@ -2660,11 +2661,13 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
       btn.disabled = false;
       btn.onclick = (e) => { e.stopPropagation(); window.open(`https://open.spotify.com/playlist/${pl.id}`, '_blank'); };
     }
-    const skippedNote = skipped.length ? ` (${skipped.length} skipped)` : '';
-    const summary = `✓ ${uris.length} tracks${skippedNote} from ${spotifyTracks.length} SP links`;
-    toast(summary);
-    console.log('[Vault] FINAL SUMMARY:', summary);
-    console.log('[Vault] Skipped URLs:', skipped);
+    const forbidden = skipped.filter(s => s.reason?.includes('403') || s.reason?.includes('Forbidden')).length;
+    const other = skipped.length - forbidden;
+    let skippedNote = '';
+    if (forbidden > 0) skippedNote += ` · ${forbidden} private playlist${forbidden !== 1 ? 's' : ''} skipped`;
+    if (other > 0) skippedNote += ` · ${other} other skipped`;
+    toast(`✓ ${uris.length} tracks from ${spotifyTracks.length} SP links${skippedNote}`);
+
 
   } catch (e) {
     if (btn) { btn.textContent = origText; btn.disabled = false; }
@@ -2697,24 +2700,22 @@ async function resolveSpotifyUris(urls, onProgress, skipped) {
   let done = 0;
   const total = urls.length;
 
-  console.log('[Vault] resolveSpotifyUris called with', urls.length, 'URLs');
-  console.log('[Vault] First 5 URLs:', urls.slice(0, 5));
 
   for (let url of urls) {
     try {
       // Expand spotify.link short URLs using Spotify's own resolve endpoint
       if (url.includes('spotify.link')) {
         try {
-          console.log('[Vault] Resolving spotify.link:', url);
+  
           const resolved = await spotifyFetch(
             `https://api.spotify.com/v1/resolve?url=${encodeURIComponent(url)}`
           );
-          console.log('[Vault] spotify.link resolved to:', resolved);
+
           if (resolved?.external_urls?.spotify) {
             url = resolved.external_urls.spotify;
-            console.log('[Vault] Expanded to:', url);
+
           } else if (resolved?.uri) {
-            console.log('[Vault] Got URI directly:', resolved.uri);
+
             uris.push(resolved.uri);
             done++;
             if (onProgress) onProgress(done, total);
@@ -2735,7 +2736,6 @@ async function resolveSpotifyUris(urls, onProgress, skipped) {
       const episodeMatch = url.match(/\/episode\/([a-zA-Z0-9]+)/);
       const trackMatch = !albumMatch && !playlistMatch && !episodeMatch && url.match(/\/track\/([a-zA-Z0-9]+)/);
 
-      console.log('[Vault] URL:', url, '| album:', !!albumMatch, '| playlist:', !!playlistMatch, '| track:', !!trackMatch, '| episode:', !!episodeMatch);
 
       if (albumMatch) {
         // Fetch all album tracks
@@ -2774,14 +2774,14 @@ async function resolveSpotifyUris(urls, onProgress, skipped) {
         uris.push(`spotify:track:${trackMatch[1]}`);
       }
     } catch(e) {
-      // Skip URLs that fail (deleted, region-locked, etc)
-      console.warn('Could not resolve:', url, e.message);
-      if (skipped) skipped.push(url);
+      // 403 = private/collaborative playlist we can't access
+      // 429 = rate limited (already handled in spotifyFetch, but just in case)
+      if (skipped) skipped.push({ url, reason: e.message });
     }
     done++;
     if (onProgress) onProgress(done, total);
   }
-  console.log('[Vault] resolveSpotifyUris done. Total URIs:', uris.length, '| Skipped:', skipped?.length || 0);
+
   return uris;
 }
 
@@ -3010,7 +3010,7 @@ function escAttr(s) {
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 10000); // extended for debug
+  setTimeout(() => t.classList.remove('show'), 4000);
 }
 </script>
 </body>
