@@ -2396,11 +2396,11 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
       body: JSON.stringify({ name: playlistName, description: `All music shared in The Vault during ${dateRange}`, public: true })
     });
 
-    // Resolve track URIs
+    // Resolve track URIs — only tracks (albums/playlists/episodes can't be mixed in)
     const uris = [];
     for (const track of spotifyTracks) {
-      const uri = extractSpotifyUri(track.url);
-      if (uri) uris.push(uri);
+      const m = track.url.match(/track\/([a-zA-Z0-9]+)/);
+      if (m) uris.push(`spotify:track:${m[1]}`);
     }
 
     // Add in batches of 100 — use /items (correct endpoint)
