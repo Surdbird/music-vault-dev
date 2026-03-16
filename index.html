@@ -2320,6 +2320,7 @@ function renderDigests() {
 
     // Spotify tracks from this week
     const spotifyTracks = sorted.filter(t => t.platform === 'spotify');
+    const ytTracks = sorted.filter(t => t.platform === 'youtube');
 
     html += `
     <div class="digest-week" id="dw-${key}">
@@ -2328,6 +2329,7 @@ function renderDigests() {
         <span class="digest-week-dates">${dateRange}</span>
         <span class="digest-week-count">${count} link${count !== 1 ? 's' : ''} · ${platSummary}</span>
         <div class="digest-week-actions">
+          ${ytTracks.length > 0 ? `<button class="btn-sm" style="border-color:var(--yt);color:var(--yt)" onclick="event.stopPropagation();openDigestYouTubePlaylist('${key}')" title="Open YouTube playlist for this week">▶ YT</button>` : ''}
           ${spotifyTracks.length > 0 ? `<button class="btn-sm btn-sp" onclick="event.stopPropagation();createDigestSpotifyPlaylist('${key}', '${label}', '${dateRange}')" title="Create Spotify playlist for this week">SP ＋</button>` : ''}
         </div>
         <span class="digest-toggle">▼</span>
@@ -2376,10 +2378,10 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
   if (btn) { btn.textContent = '…'; btn.disabled = true; }
 
   try {
-    // Create playlist
-    const pl = await spotifyFetch(`https://api.spotify.com/v1/users/${spotifyUserId}/playlists`, {
+    // Create playlist — use /me/playlists (correct, /users/ is forbidden)
+    const pl = await spotifyFetch(`https://api.spotify.com/v1/me/playlists`, {
       method: 'POST',
-      body: JSON.stringify({ name: playlistName, description: `All music shared in The Vault during ${dateRange}`, public: false })
+      body: JSON.stringify({ name: playlistName, description: `All music shared in The Vault during ${dateRange}`, public: true })
     });
 
     // Resolve track URIs
@@ -2389,15 +2391,22 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
       if (uri) uris.push(uri);
     }
 
-    // Add in batches of 100
+    // Add in batches of 100 — use /items (correct endpoint)
     for (let i = 0; i < uris.length; i += 100) {
-      await spotifyFetch(`https://api.spotify.com/v1/playlists/${pl.id}/tracks`, {
+      await spotifyFetch(`https://api.spotify.com/v1/playlists/${pl.id}/items`, {
         method: 'POST',
         body: JSON.stringify({ uris: uris.slice(i, i + 100) })
       });
+      if (i + 100 < uris.length) await sleep(300);
     }
 
-    if (btn) { btn.textContent = '✓ Created'; btn.style.background = 'var(--sp)'; btn.style.color = '#fff'; }
+    if (btn) {
+      btn.textContent = '✓ Open';
+      btn.style.background = 'var(--sp)';
+      btn.style.color = '#fff';
+      btn.disabled = false;
+      btn.onclick = (e) => { e.stopPropagation(); window.open(`https://open.spotify.com/playlist/${pl.id}`, '_blank'); };
+    }
     toast(`✓ Created "${playlistName}" with ${uris.length} tracks`);
   } catch (e) {
     if (btn) { btn.textContent = origText; btn.disabled = false; }
@@ -2428,6 +2437,19 @@ function extractSpotifyUri(url) {
   const m = url.match(/spotify\.com\/(track|album|episode)\/([A-Za-z0-9]+)/);
   if (m) return `spotify:${m[1]}:${m[2]}`;
   return null;
+}
+
+function openDigestYouTubePlaylist(weekKey) {
+  const weekMap = buildWeekMap();
+  const weekData = weekMap[weekKey];
+  if (!weekData) return;
+  const ytTracks = weekData.tracks.filter(t => t.platform === 'youtube');
+  if (!ytTracks.length) { toast('No YouTube links this week'); return; }
+  const ids = ytTracks.map(t => extractYTId(t.url)).filter(Boolean);
+  if (!ids.length) { toast('No YouTube video IDs found'); return; }
+  const first50 = ids.slice(0, 50);
+  window.open(`https://www.youtube.com/watch_videos?video_ids=${first50.join(',')}`, '_blank');
+  toast(`Opened ${first50.length}${ids.length > 50 ? ' of ' + ids.length : ''} YouTube videos as playlist`);
 }
 
 // ──────────────────────────────────────────────
