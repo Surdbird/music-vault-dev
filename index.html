@@ -1928,24 +1928,27 @@ async function createSpotifyPlaylist() {
     return;
   }
 
-  // Extract track URIs from URLs
-  const trackUris = [];
-  for (const t of spotifyTracks) {
-    const m = t.url.match(/track\/([a-zA-Z0-9]+)/);
-    if (m) trackUris.push(`spotify:track:${m[1]}`);
-  }
-
-  if (trackUris.length === 0) {
-    toast('No valid Spotify track IDs found');
-    return;
-  }
-
-  // Show progress
+  // Show progress early — resolving albums/playlists may take time
   const actionBtn = document.getElementById('modalActionBtn');
   actionBtn.disabled = true;
   const progressWrap = document.getElementById('progressWrap');
   progressWrap.classList.add('visible');
-  logProgress(`Creating playlist "${playlistName}"...`);
+  logProgress(`Resolving ${spotifyTracks.length} Spotify links (expanding albums & playlists)...`);
+  setProgress(0, spotifyTracks.length);
+
+  // Resolve all URLs to track URIs (expands albums, playlists, episodes)
+  const trackUris = await resolveSpotifyUris(spotifyTracks.map(t => t.url), (done, total) => {
+    setProgress(done, total);
+    logProgress(`Resolved ${done} / ${total} links...`);
+  });
+
+  if (trackUris.length === 0) {
+    toast('No valid Spotify track IDs found');
+    actionBtn.disabled = false;
+    progressWrap.classList.remove('visible');
+    return;
+  }
+  logProgress(`Found ${trackUris.length} tracks total. Creating playlist...`);
   setProgress(0, trackUris.length);
 
   try {
@@ -2396,12 +2399,9 @@ async function _buildDigestPlaylist(weekKey, weekLabel, dateRange) {
       body: JSON.stringify({ name: playlistName, description: `All music shared in The Vault during ${dateRange}`, public: true })
     });
 
-    // Resolve track URIs — only tracks (albums/playlists/episodes can't be mixed in)
-    const uris = [];
-    for (const track of spotifyTracks) {
-      const m = track.url.match(/track\/([a-zA-Z0-9]+)/);
-      if (m) uris.push(`spotify:track:${m[1]}`);
-    }
+    // Resolve all Spotify URLs — expands albums & playlists into individual tracks
+    if (btn) btn.textContent = '…resolving';
+    const uris = await resolveSpotifyUris(spotifyTracks.map(t => t.url));
 
     // Add in batches of 100 — use /items (correct endpoint)
     for (let i = 0; i < uris.length; i += 100) {
@@ -2442,6 +2442,66 @@ function buildWeekMap() {
     }
   }
   return weekMap;
+}
+
+// ── Resolve a list of Spotify URLs into track URIs ──
+// Handles: tracks, albums (expands), playlists (expands), episodes
+async function resolveSpotifyUris(urls, onProgress) {
+  const uris = [];
+  let done = 0;
+  const total = urls.length;
+
+  for (const url of urls) {
+    try {
+      const trackMatch = url.match(/track\/([a-zA-Z0-9]+)/);
+      const albumMatch = url.match(/album\/([a-zA-Z0-9]+)/);
+      const playlistMatch = url.match(/playlist\/([a-zA-Z0-9]+)/);
+      const episodeMatch = url.match(/episode\/([a-zA-Z0-9]+)/);
+
+      if (trackMatch) {
+        uris.push(`spotify:track:${trackMatch[1]}`);
+      } else if (episodeMatch) {
+        uris.push(`spotify:episode:${episodeMatch[1]}`);
+      } else if (albumMatch) {
+        // Fetch all album tracks
+        const albumId = albumMatch[1];
+        let offset = 0, limit = 50, total_tracks = 1;
+        while (offset < total_tracks) {
+          const data = await spotifyFetch(
+            `https://api.spotify.com/v1/albums/${albumId}/tracks?limit=${limit}&offset=${offset}`
+          );
+          if (data.items) {
+            for (const t of data.items) uris.push(`spotify:track:${t.id}`);
+            total_tracks = data.total;
+            offset += data.items.length;
+          } else break;
+          if (offset < total_tracks) await sleep(150);
+        }
+      } else if (playlistMatch) {
+        // Fetch all playlist tracks
+        const playlistId = playlistMatch[1];
+        let next = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=next,items(track(id,type))`;
+        while (next) {
+          const data = await spotifyFetch(next);
+          if (data.items) {
+            for (const item of data.items) {
+              if (item.track && item.track.type === 'track') {
+                uris.push(`spotify:track:${item.track.id}`);
+              }
+            }
+          }
+          next = data.next || null;
+          if (next) await sleep(150);
+        }
+      }
+    } catch(e) {
+      // Skip URLs that fail (deleted, region-locked, etc)
+      console.warn('Could not resolve:', url, e.message);
+    }
+    done++;
+    if (onProgress) onProgress(done, total);
+  }
+  return uris;
 }
 
 function extractSpotifyUri(url) {
