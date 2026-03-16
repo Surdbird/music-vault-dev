@@ -2692,14 +2692,45 @@ async function resolveSpotifyUris(urls, onProgress, skipped) {
   let done = 0;
   const total = urls.length;
 
-  for (const url of urls) {
+  console.log('[Vault] resolveSpotifyUris called with', urls.length, 'URLs');
+  console.log('[Vault] First 5 URLs:', urls.slice(0, 5));
+
+  for (let url of urls) {
     try {
+      // Expand spotify.link short URLs using Spotify's own resolve endpoint
+      if (url.includes('spotify.link')) {
+        try {
+          console.log('[Vault] Resolving spotify.link:', url);
+          const resolved = await spotifyFetch(
+            `https://api.spotify.com/v1/resolve?url=${encodeURIComponent(url)}`
+          );
+          console.log('[Vault] spotify.link resolved to:', resolved);
+          if (resolved?.external_urls?.spotify) {
+            url = resolved.external_urls.spotify;
+            console.log('[Vault] Expanded to:', url);
+          } else if (resolved?.uri) {
+            console.log('[Vault] Got URI directly:', resolved.uri);
+            uris.push(resolved.uri);
+            done++;
+            if (onProgress) onProgress(done, total);
+            continue;
+          }
+        } catch(e) {
+          console.warn('[Vault] Could not resolve spotify.link:', url, e.message);
+          if (skipped) skipped.push(url);
+          done++;
+          if (onProgress) onProgress(done, total);
+          continue;
+        }
+      }
+
       // Match most specific first — album/playlist before track
-      // (track regex would match inside album URLs too)
       const albumMatch = url.match(/\/album\/([a-zA-Z0-9]+)/);
       const playlistMatch = url.match(/\/playlist\/([a-zA-Z0-9]+)/);
       const episodeMatch = url.match(/\/episode\/([a-zA-Z0-9]+)/);
       const trackMatch = !albumMatch && !playlistMatch && !episodeMatch && url.match(/\/track\/([a-zA-Z0-9]+)/);
+
+      console.log('[Vault] URL:', url, '| album:', !!albumMatch, '| playlist:', !!playlistMatch, '| track:', !!trackMatch, '| episode:', !!episodeMatch);
 
       if (albumMatch) {
         // Fetch all album tracks
@@ -2745,6 +2776,7 @@ async function resolveSpotifyUris(urls, onProgress, skipped) {
     done++;
     if (onProgress) onProgress(done, total);
   }
+  console.log('[Vault] resolveSpotifyUris done. Total URIs:', uris.length, '| Skipped:', skipped?.length || 0);
   return uris;
 }
 
