@@ -2568,18 +2568,26 @@ function toggleArtistsView(btn) {
   }
 }
 
-// Extract artist name from a title string like "Artist — Song" or "Artist: Song"
+// Extract artist name from a title string like "Artist — Song"
 function extractArtistFromTitle(title) {
   if (!title) return null;
-  // Common separators: —, -, |, :, ft., feat.
-  const sep = title.match(/^(.+?)\s*(?:—|-\s|\|\s*|:\s)\s*(.+)$/);
-  if (sep) {
-    const artist = sep[1].trim();
-    // Filter out garbage (too long, looks like a sentence, all caps channel name)
-    if (artist.length > 0 && artist.length < 60 && !artist.includes('http')) {
+
+  // Only use the em dash (—) as separator — it's the standard "Artist — Song" format
+  // Regular hyphens are too ambiguous (appear in song titles, dates, etc.)
+  const emDash = title.indexOf('—');
+  if (emDash > 0) {
+    const artist = title.slice(0, emDash).trim();
+    const song = title.slice(emDash + 1).trim();
+    // Validate: artist should be reasonable length, song part should exist
+    if (artist.length >= 2 && artist.length <= 50 && song.length >= 1 &&
+        !artist.includes('http') && !artist.includes('www.') &&
+        // Filter out things that look like sentences (contain common words)
+        !/\b(the|a|an|this|that|with|from|and|for|live|at|in|on)\b/i.test(artist.slice(artist.indexOf(' ') > 0 ? artist.indexOf(' ') : 0))
+        || artist.split(' ').length <= 4) {
       return artist;
     }
   }
+
   return null;
 }
 
@@ -2650,6 +2658,10 @@ function renderArtistsView() {
 
   let html = `
     <div class="artists-header-bar">
+      <button onclick="toggleArtistsView(document.getElementById('artistsPill'))" 
+        style="font-family:'Syne Mono','Courier New',monospace;font-size:0.7rem;background:none;border:1px solid var(--rule);border-radius:2px;padding:0.3rem 0.6rem;cursor:pointer;color:var(--muted);flex-shrink:0">
+        ← Members
+      </button>
       <div class="artists-header-title">ARTISTS</div>
       <div class="artists-header-sub">${total} artists · ${ytCount} YT · ${spCount} SP tracks identified</div>
     </div>
