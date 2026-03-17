@@ -1332,8 +1332,8 @@ textarea::placeholder { color: var(--muted); }
         document.getElementById('statAM').textContent=totAM;
         document.getElementById('statBC').textContent=totBC;
         document.getElementById('statsRow').style.display='grid';
-        document.getElementById('generateBtnRow').style.display='block';
         document.getElementById('mainArea').style.display='grid';
+        setTimeout(() => { document.getElementById('generateBtnRow').style.display='block'; }, 100);
         document.getElementById('uploadSection').style.marginBottom='0';
         renderMemberList(names);selectMember(names[0]);
       }
@@ -1603,6 +1603,7 @@ function renderAll(result) {
   document.getElementById('statAM').textContent = totAM;
   document.getElementById('statBC').textContent = totBC;
   document.getElementById('statsRow').style.display = 'grid';
+  document.getElementById('generateBtnRow').style.display = 'block';
   document.getElementById('mainArea').style.display = 'grid';
   document.getElementById('uploadSection').style.marginBottom = '0';
 
@@ -2569,21 +2570,40 @@ function generateYTLinksPage() {
     return;
   }
 
-  const rows = members.map(m => {
+  const rows = members.map((m, rowIdx) => {
     const ids = m.ytTracks.map(t => extractYTId(t.url)).filter(Boolean);
-    const first50 = ids.slice(0, 50);
-    const playlistUrl = `https://www.youtube.com/watch_videos?video_ids=${first50.join(',')}`;
-    const extra = ids.length > 50 ? ` <span style="color:#999;font-size:0.8em">(first 50 of ${ids.length})</span>` : '';
+    const chunks = [];
+    for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+
+    const firstUrl = `https://www.youtube.com/watch_videos?video_ids=${chunks[0].join(',')}`;
+    const playBtn = `<a href="${firstUrl}" target="_blank" rel="noopener"
+      style="display:inline-block;background:#ff0000;color:white;padding:0.35rem 0.9rem;border-radius:3px;text-decoration:none;font-size:0.85rem;font-weight:600">
+      ▶ Play
+    </a>`;
+
+    let moreBtn = '';
+    if (chunks.length > 1) {
+      const moreParts = chunks.slice(1).map((chunk, idx) => {
+        const url = `https://www.youtube.com/watch_videos?video_ids=${chunk.join(',')}`;
+        return `<a href="${url}" target="_blank" rel="noopener"
+          style="display:inline-block;background:#cc0000;color:white;padding:0.3rem 0.7rem;border-radius:3px;text-decoration:none;font-size:0.78rem;font-weight:600;margin-right:0.25rem">
+          Part ${idx + 2} <span style="opacity:0.8;font-size:0.85em">${(idx+1)*50+1}–${(idx+1)*50+chunk.length}</span>
+        </a>`;
+      }).join('');
+
+      moreBtn = `
+        <button onclick="var el=document.getElementById('more-${rowIdx}');el.style.display=el.style.display==='none'?'block':'none';this.textContent=el.style.display==='none'?'+ more':'− less'"
+          style="background:none;border:1px solid #ccc;color:#666;padding:0.3rem 0.6rem;border-radius:3px;cursor:pointer;font-size:0.78rem;margin-left:0.4rem">
+          + more
+        </button>
+        <div id="more-${rowIdx}" style="display:none;margin-top:0.4rem">${moreParts}</div>`;
+    }
+
     return `
       <tr>
         <td>${escHtml(m.name)}</td>
         <td style="color:#888">${m.ytCount}</td>
-        <td>
-          <a href="${playlistUrl}" target="_blank" rel="noopener" 
-            style="display:inline-block;background:#ff0000;color:white;padding:0.35rem 0.9rem;border-radius:3px;text-decoration:none;font-size:0.85rem;font-weight:600">
-            ▶ Play
-          </a>${extra}
-        </td>
+        <td>${playBtn}${moreBtn}</td>
       </tr>`;
   }).join('');
 
@@ -2619,7 +2639,7 @@ function generateYTLinksPage() {
   <p>YouTube Playlists by Member · Generated ${now} · ${members.length} members · Click ▶ Play to open playlist</p>
 </header>
 <div class="container">
-  <div class="note">⚠ YouTube limits playlists to 50 videos. Members with more links show their first 50.</div>
+  <div class="note">⚠ YouTube limits playlists to 50 videos per link. Members with more links are split into multiple parts.</div>
   <table>
     <thead>
       <tr>
