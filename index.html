@@ -2729,7 +2729,7 @@ function generatePlatformLinksPage(platform) {
           <div style="color:#888;font-size:0.78rem">${m.count} link${m.count !== 1 ? 's' : ''}</div>
         </td>
         <td style="vertical-align:top;padding-top:1rem">
-          <button onclick="navigator.clipboard.writeText(${linksJson}.join('\\n')).then(()=>this.textContent='✓ Copied!').catch(()=>this.textContent='Failed')"
+          <button onclick="navigator.clipboard.writeText(this.dataset.links).then(()=>this.textContent='✓ Copied!').catch(()=>this.textContent='Failed')" data-links="${links.join('\n').replace(/"/g, '&quot;')}"
             style="background:${platformColor};color:white;border:none;padding:0.35rem 0.9rem;border-radius:3px;cursor:pointer;font-size:0.85rem;font-weight:600;margin-bottom:0.5rem;display:block">
             ⎘ Copy All Links
           </button>
