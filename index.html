@@ -2789,8 +2789,10 @@ function generateArtistsLinksPage() {
     }
   }
 
-  // Sort alphabetically
-  const sorted = Object.entries(artistMap).sort(([a], [b]) => a.localeCompare(b));
+  // Sort by track count desc, filter out single-track entries (likely song titles not artists)
+  const sorted = Object.entries(artistMap)
+    .filter(([, data]) => data.ytUrls.length >= 2)
+    .sort(([, a], [, b]) => b.ytUrls.length - a.ytUrls.length);
 
   if (!sorted.length) {
     toast('No artist data — titles still loading');
