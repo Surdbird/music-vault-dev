@@ -3497,6 +3497,13 @@ async function loadGenreView() {
   renderGenreView();
 }
 
+// Persistent artist->genre cache so we never fetch the same artist twice
+let artistGenreCache = {};
+try {
+  const saved = localStorage.getItem('vault_artist_genres');
+  if (saved) artistGenreCache = JSON.parse(saved);
+} catch(e) {}
+
 async function buildGenreData() {
   genreData = {};
 
@@ -3509,90 +3516,93 @@ async function buildGenreData() {
     if (txt) txt.textContent = msg;
   };
 
-  // Step 1: Collect 1 track ID per member (minimise API calls)
-  // Pick a track from the middle of their list for variety
+  // Step 1: Collect 1 track ID per member — pick from middle for variety
   const memberTrackIds = {};
   for (const memberName of members) {
     const tracks = allData[memberName].spotify || [];
     const trackUrls = tracks.map(t => t.url).filter(u => u.includes('/track/'));
     if (!trackUrls.length) continue;
-    // Pick one from middle
     const pick = trackUrls[Math.floor(trackUrls.length / 2)];
     const id = pick.match(/\/track\/([a-zA-Z0-9]+)/)?.[1];
-    if (id) memberTrackIds[memberName] = [id];
+    if (id) memberTrackIds[memberName] = id;
   }
 
-  // Flatten all track IDs (deduplicated)
-  const allTrackIds = [...new Set(Object.values(memberTrackIds).flat())];
-  const totalTracks = allTrackIds.length;
+  const memberList = Object.entries(memberTrackIds);
+  const total = memberList.length;
 
-  updateProgress(`Waiting for Spotify rate limit to clear...`, 2);
-  await sleep(2000); // Initial pause to avoid rate limits from recent operations
+  updateProgress(`Starting — fetching genres for ${total} members...`, 2);
+  await sleep(1500);
 
-  updateProgress(`Fetching genres for ${members.length} members (${totalTracks} tracks)...`, 5);
-
-  // Step 2: Batch fetch tracks (50 at a time) to get artist IDs
-  const trackArtistMap = {}; // trackId -> artistId
-  for (let i = 0; i < allTrackIds.length; i += 50) {
-    const batch = allTrackIds.slice(i, i + 50);
+  // Step 2: For each member, fetch track → get artistId → get genres
+  // One by one with pauses — slow but reliable, uses individual endpoints
+  let done = 0;
+  for (const [memberName, trackId] of memberList) {
     try {
-      const data = await spotifyFetch(
-        `https://api.spotify.com/v1/tracks?ids=${batch.join(',')}`
-      );
-      for (const track of (data.tracks || [])) {
-        if (track?.id && track?.artists?.[0]?.id) {
-          trackArtistMap[track.id] = track.artists[0].id;
+      let artistId = null;
+      let genres = null;
+
+      // Fetch track with exponential backoff
+      let backoff = 1000;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const track = await spotifyFetch(`https://api.spotify.com/v1/tracks/${trackId}`);
+          artistId = track?.artists?.[0]?.id;
+          break;
+        } catch(e) {
+          if (e.message?.includes('429') || e.message?.includes('503')) {
+            updateProgress(`⏳ Rate limited, waiting ${backoff/1000}s... (${memberName})`, Math.round(done / total * 100));
+            await sleep(backoff);
+            backoff = Math.min(backoff * 2, 30000); // cap at 30s
+          } else break;
+        }
+      }
+
+      if (artistId) {
+        if (artistGenreCache[artistId]) {
+          genres = artistGenreCache[artistId];
+        } else {
+          // Fetch artist with exponential backoff
+          backoff = 1000;
+          for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+              const artist = await spotifyFetch(`https://api.spotify.com/v1/artists/${artistId}`);
+              genres = artist?.genres || [];
+              artistGenreCache[artistId] = genres;
+              try { localStorage.setItem('vault_artist_genres', JSON.stringify(artistGenreCache)); } catch(e) {}
+              break;
+            } catch(e) {
+              if (e.message?.includes('429') || e.message?.includes('503')) {
+                updateProgress(`⏳ Rate limited, waiting ${backoff/1000}s... (${memberName})`, Math.round(done / total * 100));
+                await sleep(backoff);
+                backoff = Math.min(backoff * 2, 30000);
+              } else break;
+            }
+          }
+        }
+
+        if (genres) {
+          const broadGenre = getBroadGenre(genres);
+          const subGenre = genres[0] || 'unclassified';
+          if (!genreData[broadGenre]) genreData[broadGenre] = {};
+          if (!genreData[broadGenre][subGenre]) genreData[broadGenre][subGenre] = {};
+          if (!genreData[broadGenre][subGenre][memberName]) genreData[broadGenre][subGenre][memberName] = 0;
+          genreData[broadGenre][subGenre][memberName]++;
         }
       }
     } catch(e) {
-      console.warn('Track batch error:', e.message);
-      if (e.message?.includes('429')) await sleep(3000);
+      console.warn('Genre fetch error for', memberName, e.message);
     }
-    updateProgress(`Fetched tracks ${Math.min(i+50, allTrackIds.length)}/${totalTracks}...`, 
-      5 + Math.round(i / allTrackIds.length * 35));
-    await sleep(500);
-  }
 
-  // Step 3: Batch fetch artists (50 at a time) to get genres
-  const allArtistIds = [...new Set(Object.values(trackArtistMap))];
-  const artistGenreMap = {}; // artistId -> genres[]
-  updateProgress(`Fetching genres for ${allArtistIds.length} artists...`, 40);
-
-  for (let i = 0; i < allArtistIds.length; i += 50) {
-    const batch = allArtistIds.slice(i, i + 50);
-    try {
-      const data = await spotifyFetch(
-        `https://api.spotify.com/v1/artists?ids=${batch.join(',')}`
-      );
-      for (const artist of (data.artists || [])) {
-        if (artist?.id) artistGenreMap[artist.id] = artist.genres || [];
-      }
-    } catch(e) {
-      console.warn('Artist batch error:', e.message);
-      if (e.message?.includes('429')) await sleep(3000);
+    done++;
+    updateProgress(`${memberName} (${done}/${total})`, Math.round(done / total * 100));
+    // Save partial results every 10 members
+    if (done % 10 === 0 && Object.keys(genreData).length > 0) {
+      try { localStorage.setItem('vault_genres', JSON.stringify(genreData)); } catch(e) {}
     }
-    updateProgress(`Fetched artists ${Math.min(i+50, allArtistIds.length)}/${allArtistIds.length}...`,
-      40 + Math.round(i / allArtistIds.length * 50));
-    await sleep(500);
-  }
-
-  // Step 4: Build genreData from member -> trackIds -> artistId -> genres
-  for (const [memberName, trackIds] of Object.entries(memberTrackIds)) {
-    for (const trackId of trackIds) {
-      const artistId = trackArtistMap[trackId];
-      if (!artistId) continue;
-      const genres = artistGenreMap[artistId] || [];
-      const broadGenre = getBroadGenre(genres);
-      const subGenre = genres[0] || 'unclassified';
-      if (!genreData[broadGenre]) genreData[broadGenre] = {};
-      if (!genreData[broadGenre][subGenre]) genreData[broadGenre][subGenre] = {};
-      if (!genreData[broadGenre][subGenre][memberName]) genreData[broadGenre][subGenre][memberName] = 0;
-      genreData[broadGenre][subGenre][memberName]++;
-    }
+    await sleep(800); // slightly slower — 800ms between members
   }
 
   updateProgress('Done!', 100);
-  // Save even partial results
   if (Object.keys(genreData).length > 0) {
     try { localStorage.setItem('vault_genres', JSON.stringify(genreData)); } catch(e) {}
     genreFetchDone = true;
