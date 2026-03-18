@@ -3393,8 +3393,8 @@ async function generateSanctorum() {
     + '</a>'
     + '<a class="card" href="' + base + '/links-spotify-genres.html">'
     + '<div class="card-icon">◎</div>'
-    + '<div class="card-title">Genre Playlists on Spotify</div>'
-    + '<div class="card-desc">Spotify playlists by genre — Jazz, Rock, Blues and more.</div>'
+    + '<div class="card-title">The Vault — Complete</div>'
+    + '<div class="card-desc">Every Spotify track ever shared in The Vault — one massive playlist.</div>'
     + '<span class="card-platform sp">Spotify</span>'
     + '</a>'
     + '</div></div>'
@@ -4131,6 +4131,11 @@ function getBroadGenre(genres) {
 
 function renderGenreView() {
   const content = document.getElementById('genreContent');
+
+  // Add Complete Vault button at top
+  const completeBtn = spotifyToken ? `<div style="text-align:right;margin-bottom:1rem">
+    <button class="btn-sm btn-sp" id="complete-vault-btn" onclick="createCompleteVaultPlaylist()">◎ Create The Vault — Complete</button>
+  </div>` : '';
   
   // Sort broad genres by track count
   const sorted = Object.entries(genreData).sort(([,a],[,b]) => {
@@ -4147,7 +4152,7 @@ function renderGenreView() {
     return;
   }
 
-  content.innerHTML = sorted.map(([broad, subGenres]) => {
+  content.innerHTML = completeBtn + sorted.map(([broad, subGenres]) => {
     const totalTracks = Object.values(subGenres).reduce((s, members) => 
       s + Object.values(members).reduce((ms, t) => ms + (typeof t === 'number' ? t : t.length), 0), 0);
     
@@ -4169,7 +4174,7 @@ function renderGenreView() {
           <span class="genre-count">${totalTracks} tracks</span>
         </div>
         <div style="display:flex;align-items:center;gap:0.5rem" onclick="event.stopPropagation()">
-          ${spotifyToken ? `<button class="btn-sm btn-sp" id="gsp-${safeId(broad)}" onclick="createGenreSpotifyPlaylist('${escAttr(broad)}')" title="Create Spotify playlist for ${escAttr(broad)}">SP ＋</button>` : ''}
+
           <span class="genre-chevron">▾</span>
         </div>
       </div>
@@ -4180,6 +4185,63 @@ function renderGenreView() {
 
 function toggleGenreCard(id) {
   document.getElementById('genre-' + id)?.classList.toggle('expanded');
+}
+
+async function createCompleteVaultPlaylist() {
+  if (!spotifyToken) { toast('Connect Spotify first'); return; }
+  const btn = document.getElementById('complete-vault-btn');
+  if (btn) { btn.textContent = '…collecting tracks'; btn.disabled = true; }
+
+  try {
+    // Collect ALL unique Spotify track URLs from all members
+    const allUrls = [];
+    for (const [, platformData] of Object.entries(allData)) {
+      for (const track of (platformData.spotify || [])) {
+        if (track.url.includes('/track/')) allUrls.push(track.url);
+      }
+    }
+
+    const uniqueUrls = [...new Set(allUrls)];
+    if (!uniqueUrls.length) { toast('No Spotify tracks found'); if(btn){btn.textContent='◎ Create The Vault — Complete';btn.disabled=false;} return; }
+
+    if (btn) btn.textContent = `…resolving ${uniqueUrls.length} tracks`;
+    const uris = uniqueUrls.map(u => { const m = u.match(/\/track\/([a-zA-Z0-9]+)/); return m ? `spotify:track:${m[1]}` : null; }).filter(Boolean);
+
+    const pl = await spotifyFetch(`https://api.spotify.com/v1/me/playlists`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'The Vault — Complete', description: 'Every Spotify track ever shared in The Vault community', public: true })
+    });
+
+    const BATCH = 100;
+    let added = 0;
+    for (let i = 0; i < uris.length; i += BATCH) {
+      await spotifyFetch(`https://api.spotify.com/v1/playlists/${pl.id}/items`, {
+        method: 'POST', body: JSON.stringify({ uris: uris.slice(i, i + BATCH) })
+      });
+      added += BATCH;
+      if (btn) btn.textContent = `…${Math.min(added, uris.length)}/${uris.length}`;
+      if (i + BATCH < uris.length) await sleep(500);
+    }
+
+    try { await spotifyFetch(`https://api.spotify.com/v1/playlists/${pl.id}/followers`, { method: 'PUT', body: JSON.stringify({ public: true }) }); } catch(e) {}
+
+    // Save it
+    try {
+      const saved = JSON.parse(localStorage.getItem('vault_genre_playlists') || '{}');
+      saved['Complete'] = { playlistId: pl.id, url: `https://open.spotify.com/playlist/${pl.id}`, name: 'The Vault — Complete' };
+      localStorage.setItem('vault_genre_playlists', JSON.stringify(saved));
+    } catch(e) {}
+
+    if (btn) {
+      btn.textContent = '✓ Open The Vault — Complete';
+      btn.style.background = 'var(--sp)'; btn.style.color = '#fff'; btn.disabled = false;
+      btn.onclick = () => window.open(`https://open.spotify.com/playlist/${pl.id}`, '_blank');
+    }
+    toast(`✓ Created "The Vault — Complete" with ${uris.length} tracks`);
+  } catch(e) {
+    if (btn) { btn.textContent = '◎ Create The Vault — Complete'; btn.disabled = false; }
+    toast('Error: ' + e.message);
+  }
 }
 
 async function createGenreSpotifyPlaylist(broadGenre) {
