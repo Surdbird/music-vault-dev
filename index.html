@@ -3275,7 +3275,7 @@ async function generateSanctorum() {
     try {
       toast('Fetching latest weekly playlist...');
       // Get user playlists and find the most recent "The Vault — W" one
-      let next = `https://api.spotify.com/v1/users/${spotifyUserId}/playlists?limit=50`;
+      let next = `https://api.spotify.com/v1/me/playlists?limit=50`;
       let found = null;
       while (next && !found) {
         const data = await spotifyFetch(next);
