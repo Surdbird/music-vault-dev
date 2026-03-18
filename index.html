@@ -1239,9 +1239,7 @@ textarea::placeholder { color: var(--muted); }
   <button onclick="generateSanctorum()" style="font-family:'Syne Mono','Courier New',monospace;font-size:0.72rem;background:#1a1612;color:#d4845a;border:1px solid #d4845a;padding:0.4rem 1rem;border-radius:2px;cursor:pointer">
     ✦ Generate The Vault Sanctorum
   </button>
-  <button onclick="generateSpotifyByGenrePage()" style="font-family:'Syne Mono','Courier New',monospace;font-size:0.72rem;background:none;border:1px solid var(--sp);color:var(--sp);padding:0.4rem 1rem;border-radius:2px;cursor:pointer">
-    ◎ Generate Spotify by Genre Page
-  </button>
+
   <button onclick="generateSpotifyByArtistPage()" style="font-family:'Syne Mono','Courier New',monospace;font-size:0.72rem;background:none;border:1px solid var(--sp);color:var(--sp);padding:0.4rem 1rem;border-radius:2px;cursor:pointer">
     ◎ Generate Spotify by Artist Page
   </button>
@@ -3265,6 +3263,11 @@ async function generateSanctorum() {
   const spotifyProfile = 'https://open.spotify.com/user/sumit.nurpuri';
   const now = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
 
+  // Get Complete Vault playlist URL
+  const genrePlaylists = JSON.parse(localStorage.getItem('vault_genre_playlists') || '{}');
+  const completeVaultUrl = genrePlaylists['Complete']?.url || spotifyProfile;
+  const completeVaultTracks = '6500+';
+
   // Fetch the latest weekly digest playlist from Spotify
   let latestWeeklyName = '';
   let latestWeeklyUrl = spotifyProfile;
@@ -3391,10 +3394,10 @@ async function generateSanctorum() {
     + '<div class="card-desc">Jazz, Rock, Blues, Folk and more — YouTube playlists curated by genre across all members.*</div>'
     + '<span class="card-platform multi">YouTube · MusicBrainz</span>'
     + '</a>'
-    + '<a class="card" href="' + base + '/links-spotify-genres.html">'
+    + '<a class="card" href="' + completeVaultUrl + '" target="_blank" rel="noopener">'
     + '<div class="card-icon">◎</div>'
     + '<div class="card-title">The Vault — Complete</div>'
-    + '<div class="card-desc">Every Spotify track ever shared in The Vault — one massive playlist.</div>'
+    + '<div class="card-desc">Every Spotify track ever shared in The Vault — ' + completeVaultTracks + ' tracks, 546+ hours.</div>'
     + '<span class="card-platform sp">Spotify</span>'
     + '</a>'
     + '</div></div>'
