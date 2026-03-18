@@ -3454,8 +3454,8 @@ async function generateSanctorum() {
     for (const [, pd] of Object.entries(allData || {})) {
       for (const t of (pd.youtube || [])) {
         if (!t.date) continue;
-        const td = new Date(t.date);
-        if (td >= _weekStart && td <= _now) {
+        const td = parseWADate(t.date);
+        if (td && td >= _weekStart && td <= _now) {
           const id = extractYTId(t.url);
           if (id && !_weekYTIds.includes(id)) _weekYTIds.push(id);
         }
