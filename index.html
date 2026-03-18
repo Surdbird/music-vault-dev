@@ -3442,8 +3442,7 @@ async function generateSanctorum() {
           ).join('') : '')
       : '<div class="card" style="opacity:0.5"><div class="card-icon">▶</div><div class="card-title">This Week on YouTube</div><div class="card-desc">No YouTube links found for this week yet.</div><span class="card-platform yt">YouTube</span></div>';
 
-    // Weekly
-    + '<div class="section">'
+    const weeklySection = '<div class="section">'
     + '<div class="section-title">Weekly Digest</div>'
     + '<div class="grid">'
     + '<a class="card" href="' + latestWeeklyUrl + '" target="_blank" rel="noopener">'
@@ -3453,8 +3452,9 @@ async function generateSanctorum() {
     + '<span class="card-platform sp">Spotify</span>'
     + '</a>'
     + ytWeeklyCard
-    + '</div></div>'
+    + '</div></div>';
 
+    + weeklySection
     + '</div>'
     + '<footer>* Genre playlists are approximate — YouTube videos shown are from members who share that genre, not exclusively that genre.<br><br>'
     + 'Built with \u2665 by Sumit &amp; Claude \u00b7 <a href="' + base + '/" style="color:#3d3530">Open The Vault</a></footer>'
